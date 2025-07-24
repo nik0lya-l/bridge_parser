@@ -1,9 +1,9 @@
-name: Run Parser at HH:17
+name: Run Parser at HH:02
 
 on:
   schedule:
-    - cron: '17 * * * *'  # Каждый час в :17 минуты (UTC)
-  workflow_dispatch:  # Позволяет запускать вручную
+    - cron: '2 * * * *'
+  workflow_dispatch:
 
 jobs:
   run-parser:
@@ -15,18 +15,18 @@ jobs:
       - name: Set up Python
         uses: actions/setup-python@v4
         with:
-          python-version: '3.10'  # Укажите вашу версию Python
+          python-version: '3.10'
 
       - name: Install dependencies
-        run: pip install -r requirements.txt  # Если есть зависимости
+        run: pip install -r requirements.txt  # Установка всех библиотек
 
       - name: Run Parser
-        run: python parser.py  # Запуск парсера
+        run: python parser.py  # Теперь telethon будет доступен
 
       - name: Commit and Push Changes
         run: |
           git config --global user.name "GitHub Actions"
           git config --global user.email "actions@github.com"
-          git add .  # Или укажите конкретный файл (например, data.json)
+          git add data.json
           git commit -m "Auto-update: New data from parser"
           git push
