@@ -143,45 +143,98 @@ st.markdown('</div>', unsafe_allow_html=True)  # Закрываем date-contain
 # Фильтруем данные по выбранной дате
 filtered_df = df[df["date"].dt.date == st.session_state.selected_date]
 
-# Создаем данные для графика
-hours = list(range(24))
-counts = []
-waits = []
+# Проверяем, является ли выбранная дата текущей (последней доступной)
+is_current_date = st.session_state.selected_date == available_dates[-1]
 
-col_count = st.session_state.selected_direction
-col_wait = col_count + "_wait"
-
-for h in hours:
-    row = filtered_df[filtered_df["hour"] == h]
-    if not row.empty:
-        # Обработка значений количества машин
-        count_val = row[col_count].values[0]
-        if pd.notna(count_val):
-            counts.append(max(0, int(count_val)))
+if is_current_date:
+    # Для текущей даты - находим последний час с данными
+    last_hour = filtered_df[filtered_df[st.session_state.selected_direction].notna()]["hour"].max()
+    if pd.isna(last_hour):
+        last_hour = 0  # если нет данных вообще
+    else:
+        last_hour = int(last_hour)
+    
+    # Создаем список часов от (last_hour-23) до last_hour
+    hours = [(last_hour - 23 + i) % 24 for i in range(24)]
+    # Корректируем отрицательные значения
+    hours = [h if h >= 0 else h + 24 for h in hours]
+    
+    # Создаем метки для оси X
+    x_labels = [f"{h:02d}:00" for h in hours]
+    
+    # Собираем данные в правильном порядке
+    counts = []
+    waits = []
+    
+    col_count = st.session_state.selected_direction
+    col_wait = col_count + "_wait"
+    
+    for h in hours:
+        row = filtered_df[filtered_df["hour"] == h]
+        if not row.empty:
+            # Обработка значений количества машин
+            count_val = row[col_count].values[0]
+            if pd.notna(count_val):
+                counts.append(max(0, int(count_val)))
+            else:
+                counts.append(0)
+            
+            # Обработка значений времени ожидания
+            wait_val = row[col_wait].values[0]
+            if pd.notna(wait_val):
+                if isinstance(wait_val, str):
+                    wait_val = ''.join(filter(str.isdigit, wait_val))
+                    wait_val = float(wait_val) if wait_val else 0
+                waits.append(max(0, float(wait_val)))
+            else:
+                waits.append(0)
         else:
             counts.append(0)
-        
-        # Обработка значений времени ожидания
-        wait_val = row[col_wait].values[0]
-        if pd.notna(wait_val):
-            # Преобразуем строки в числа, если необходимо
-            if isinstance(wait_val, str):
-                # Убираем текст и оставляем только цифры
-                wait_val = ''.join(filter(str.isdigit, wait_val))
-                wait_val = float(wait_val) if wait_val else 0
-            waits.append(max(0, float(wait_val)))
-        else:
             waits.append(0)
-    else:
-        counts.append(0)
-        waits.append(0)
+    
+    x_axis = x_labels
+    x_title = f"Время (последние 24 часа до {last_hour:02d}:00)"
+else:
+    # Для не текущих дат - стандартный график 00:00-23:00
+    hours = list(range(24))
+    counts = []
+    waits = []
+    
+    col_count = st.session_state.selected_direction
+    col_wait = col_count + "_wait"
+    
+    for h in hours:
+        row = filtered_df[filtered_df["hour"] == h]
+        if not row.empty:
+            # Обработка значений количества машин
+            count_val = row[col_count].values[0]
+            if pd.notna(count_val):
+                counts.append(max(0, int(count_val)))
+            else:
+                counts.append(0)
+            
+            # Обработка значений времени ожидания
+            wait_val = row[col_wait].values[0]
+            if pd.notna(wait_val):
+                if isinstance(wait_val, str):
+                    wait_val = ''.join(filter(str.isdigit, wait_val))
+                    wait_val = float(wait_val) if wait_val else 0
+                waits.append(max(0, float(wait_val)))
+            else:
+                waits.append(0)
+        else:
+            counts.append(0)
+            waits.append(0)
+    
+    x_axis = [f"{h:02d}:00" for h in hours]
+    x_title = "Часы (00:00-23:00)"
 
 # Создаем график
 fig = go.Figure()
 
 # График количества машин
 fig.add_trace(go.Scatter(
-    x=hours,
+    x=x_axis,
     y=counts,
     name="Количество машин",
     yaxis="y1",
@@ -192,7 +245,7 @@ fig.add_trace(go.Scatter(
 
 # График времени ожидания
 fig.add_trace(go.Scatter(
-    x=hours,
+    x=x_axis,
     y=waits,
     name="Часы ожидания",
     yaxis="y2",
@@ -201,30 +254,35 @@ fig.add_trace(go.Scatter(
     marker=dict(size=8)
 ))
 
-# Вычисляем безопасные границы для осей
-y1_max = max(counts) * 1.2 if counts and max(counts) > 0 else 100
-y2_max = max(waits) * 1.2 if waits and max(waits) > 0 else 5
+# Фиксированные параметры осей
+y1_range = [0, 1500]  # Фиксированный диапазон для количества машин
+y1_tickvals = list(range(0, 1501, 100))  # Шаг 100 для оси количества машин
 
-# Настраиваем макет с гарантией положительных значений
+y2_range = [0, 5]  # Фиксированный диапазон для времени ожидания
+y2_tickvals = list(range(0, 6, 1))  # Шаг 1 для оси времени ожидания
+
+# Настраиваем макет с фиксированными шкалами
 fig.update_layout(
     title=f"Данные за {st.session_state.selected_date.strftime('%d.%m.%Y')} | Направление: {direction_rus}",
     xaxis=dict(
-        title="Часы",
+        title=x_title,
         tickmode="array",
-        tickvals=list(range(0, 24, 2)),
-        range=[0, 23],
-        tickfont=dict(size=12)
+        tickvals=x_axis[::2],
+        tickfont=dict(size=10),
+        tickangle=45
     ),
     yaxis=dict(
         title="Количество машин",
-        range=[0, y1_max],
-        showgrid=False,
+        range=y1_range,
+        tickvals=y1_tickvals,
+        showgrid=True,
         zeroline=False,
         side="left"
     ),
     yaxis2=dict(
         title="Часы ожидания",
-        range=[0, y2_max],
+        range=y2_range,
+        tickvals=y2_tickvals,
         overlaying="y",
         side="right",
         showgrid=False,
@@ -232,7 +290,7 @@ fig.update_layout(
     ),
     legend=dict(x=0.1, y=1.15, orientation="h"),
     height=500,
-    margin=dict(l=50, r=50, t=100, b=50),
+    margin=dict(l=50, r=50, t=100, b=100),
     showlegend=True,
     modebar={'remove': ['zoom', 'pan', 'select', 'zoomIn', 'zoomOut', 'resetScale', 'autoScale', 'toImage']}
 )
