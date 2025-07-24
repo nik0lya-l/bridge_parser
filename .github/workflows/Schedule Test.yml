@@ -1,0 +1,10 @@
+name: Schedule Test
+on:
+  schedule:
+    - cron: '*/5 * * * *'  # Каждые 5 минут (для теста)
+  workflow_dispatch:
+jobs:
+  test:
+    runs-on: ubuntu-latest
+    steps:
+      - run: echo "🕒 Работает! Время: $(date)"
