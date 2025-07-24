@@ -1,0 +1,71 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Data Visualization</title>
+    <!-- Подключаем Chart.js -->
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: Arial, sans-serif; margin: 20px; }
+        #chart-container { width: 800px; height: 400px; margin: 0 auto; }
+    </style>
+</head>
+<body>
+    <h1>Данные из GitHub</h1>
+    <div id="chart-container">
+        <canvas id="myChart"></canvas>
+    </div>
+
+    <script>
+        // URL вашего файла с данными (замените на ваш!)
+        const DATA_URL = "https://raw.githubusercontent.com/nik0lya-l/bridge_parser/refs/heads/main/crimea_bridge.csv";
+
+        // Функция для загрузки данных
+        async function fetchData() {
+            const response = await fetch(DATA_URL);
+            return await response.json();
+        }
+
+        // Создаём график
+        const ctx = document.getElementById('myChart').getContext('2d');
+        const chart = new Chart(ctx, {
+            type: 'line', // тип графика (можно поменять на 'bar', 'pie' и т.д.)
+            data: {
+                labels: [], // подписи оси X (пока пустые)
+                datasets: [{
+                    label: 'Данные из GitHub',
+                    data: [], // данные (пока пустые)
+                    borderColor: 'rgb(75, 192, 192)',
+                    tension: 0.1
+                }]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: { beginAtZero: true }
+                }
+            }
+        });
+
+        // Функция обновления графика
+        async function updateChart() {
+            try {
+                const data = await fetchData();
+                // Предполагаем, что данные в формате { labels: [...], values: [...] }
+                chart.data.labels = data.labels; // обновляем подписи
+                chart.data.datasets[0].data = data.values; // обновляем значения
+                chart.update(); // перерисовываем график
+                console.log("Данные обновлены!");
+            } catch (error) {
+                console.error("Ошибка загрузки данных:", error);
+            }
+            // Обновляем каждые 60 минут (60 * 60 * 1000 мс)
+            setTimeout(updateChart, 3600000);
+        }
+
+        // Запускаем первый раз
+        updateChart();
+    </script>
+</body>
+</html>
