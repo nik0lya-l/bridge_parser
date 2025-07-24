@@ -1,3 +1,4 @@
+telethon
 streamlit
 pandas
 plotly
