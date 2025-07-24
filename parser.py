@@ -4,8 +4,8 @@ import csv
 from telethon.sync import TelegramClient
 
 # Настройки
-api_id = 23024183  # Ваш api_id
-api_hash = 'b1f1c58c817d8a9bc589ba73264d00d3'  # Ваш api_hash
+api_id = 24006747  # Ваш api_id
+api_hash = '20201870409f49b65b63e662c81651ae'  # Ваш api_hash
 channel_username = 'most_official'
 
 def normalize_wait(raw_text):
