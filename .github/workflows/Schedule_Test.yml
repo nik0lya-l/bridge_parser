@@ -1,4 +1,4 @@
-name: Schedule Test
+name: Schedule_Test
 on:
   schedule:
     - cron: '*/5 * * * *'  # Каждые 5 минут (для теста)
