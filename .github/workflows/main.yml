@@ -38,5 +38,5 @@ jobs:
           git pull --ff-only  # Синхронизируем с удаленным репозиторием
           git add data.json   # Или другой файл, который изменяет парсер
           git diff --quiet && git diff --staged --quiet || git commit -m "Auto-update: New data from parser [skip ci]"
-          
+          git remote set-url origin https://github.com/${{ github.repository }}
           git push
