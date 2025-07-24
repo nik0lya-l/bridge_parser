@@ -116,6 +116,14 @@
             border-radius: 5px;
             margin: 20px 0;
         }
+        
+        /* Отключаем все интерактивные элементы Plotly */
+        .modebar {
+            display: none !important;
+        }
+        .main-svg {
+            pointer-events: none !important;
+        }
     </style>
 </head>
 <body>
@@ -323,7 +331,7 @@
                 document.getElementById('total-cars').textContent = counts.reduce((a, b) => a + b, 0);
                 document.getElementById('max-wait').textContent = `${Math.max(...waits).toFixed(1)} часов`;
                 
-                // Создаем график
+                // Создаем график с отключенными всеми интерактивными элементами
                 Plotly.newPlot('chart', [
                     {
                         x: xLabels,
@@ -349,7 +357,8 @@
                     xaxis: {
                         title: xTitle,
                         tickangle: 45,
-                        tickfont: { size: 10 }
+                        tickfont: { size: 10 },
+                        fixedrange: true
                     },
                     yaxis: {
                         title: "Количество машин",
@@ -368,8 +377,20 @@
                         y: 1.1
                     },
                     margin: { t: 80, l: 60, r: 60, b: 100 },
-                    hovermode: 'x unified'
+                    hovermode: false,
+                    dragmode: false,
+                    scrollZoom: false,
+                    showTips: false,
+                    displayModeBar: false,
+                    staticPlot: true
                 });
+                
+                // Дополнительно отключаем все возможные интерактивные элементы
+                const plot = document.getElementById('chart');
+                plot.on('plotly_click', () => false);
+                plot.on('plotly_hover', () => false);
+                plot.on('plotly_unhover', () => false);
+                plot.on('plotly_selected', () => false);
                 
             } catch (error) {
                 console.error("Ошибка при обновлении графика:", error);
