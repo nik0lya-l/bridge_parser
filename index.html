@@ -1,71 +1,276 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Data Visualization</title>
-    <!-- Подключаем Chart.js -->
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <title>Крымский мост - статистика</title>
+    <!-- Подключаем Plotly (как в Streamlit) -->
+    <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+    <!-- Подключаем PapaParse для работы с CSV -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <style>
-        body { font-family: Arial, sans-serif; margin: 20px; }
-        #chart-container { width: 800px; height: 400px; margin: 0 auto; }
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 20px;
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 20px;
+            flex-wrap: wrap;
+        }
+        .date-nav {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+        }
+        .nav-button {
+            padding: 5px 10px;
+            cursor: pointer;
+        }
+        .metrics {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 20px 0;
+        }
+        .metric-card {
+            background-color: #f0f2f6;
+            border-radius: 10px;
+            padding: 15px;
+            min-width: 200px;
+            text-align: center;
+            box-shadow: 0 2px 4px rgba(0,0,0,0.1);
+        }
+        .metric-title {
+            font-size: 14px;
+            color: #555;
+        }
+        .metric-value {
+            font-size: 24px;
+            font-weight: bold;
+            color: #1f77b4;
+        }
+        .metric-wait {
+            color: #ff7f0e;
+        }
+        #chart {
+            height: 500px;
+            width: 100%;
+        }
     </style>
 </head>
 <body>
-    <h1>Данные из GitHub</h1>
-    <div id="chart-container">
-        <canvas id="myChart"></canvas>
+    <div class="header">
+        <h1>Статистика движения по Крымскому мосту</h1>
+    </div>
+
+    <div class="controls">
+        <div class="direction-selector">
+            <label>Направление:</label>
+            <div>
+                <input type="radio" id="to_crimea" name="direction" value="to_crimea" checked>
+                <label for="to_crimea">В Крым</label>
+                <input type="radio" id="from_crimea" name="direction" value="from_crimea">
+                <label for="from_crimea">Из Крыма</label>
+            </div>
+        </div>
+
+        <div class="date-nav">
+            <button class="nav-button" id="prev-date">←</button>
+            <input type="date" id="date-picker">
+            <button class="nav-button" id="next-date">→</button>
+        </div>
+    </div>
+
+    <div id="chart"></div>
+
+    <div class="metrics">
+        <div class="metric-card">
+            <div class="metric-title">Всего машин за сутки</div>
+            <div class="metric-value" id="total-cars">0</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-title">Максимальное время ожидания</div>
+            <div class="metric-value metric-wait" id="max-wait">0 часов</div>
+        </div>
     </div>
 
     <script>
-        // URL вашего файла с данными (замените на ваш!)
-        const DATA_URL = "https://raw.githubusercontent.com/nik0lya-l/bridge_parser/refs/heads/main/crimea_bridge.csv";
+        // Конфигурация
+        const DATA_URL = "https://raw.githubusercontent.com/nik0lya-l/bridge_parser/main/crimea_bridge.csv";
+        let allData = [];
+        let availableDates = [];
+        let currentDate = null;
 
-        // Функция для загрузки данных
-        async function fetchData() {
+        // Загрузка данных
+        async function loadData() {
             const response = await fetch(DATA_URL);
-            return await response.json();
+            const text = await response.text();
+            
+            return new Promise((resolve) => {
+                Papa.parse(text, {
+                    header: true,
+                    complete: (results) => {
+                        // Преобразуем даты и часы как в Streamlit
+                        const data = results.data.map(row => {
+                            return {
+                                ...row,
+                                date: new Date(row.date.split('.').reverse().join('-')),
+                                hour: parseInt(row.time.slice(0, 2))
+                            };
+                        });
+                        resolve(data);
+                    }
+                });
+            });
         }
 
-        // Создаём график
-        const ctx = document.getElementById('myChart').getContext('2d');
-        const chart = new Chart(ctx, {
-            type: 'line', // тип графика (можно поменять на 'bar', 'pie' и т.д.)
-            data: {
-                labels: [], // подписи оси X (пока пустые)
-                datasets: [{
-                    label: 'Данные из GitHub',
-                    data: [], // данные (пока пустые)
-                    borderColor: 'rgb(75, 192, 192)',
-                    tension: 0.1
-                }]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    y: { beginAtZero: true }
+        // Инициализация приложения
+        async function initApp() {
+            allData = await loadData();
+            
+            // Получаем уникальные даты
+            availableDates = [...new Set(allData.map(item => 
+                new Date(item.date).toISOString().split('T')[0]
+            ))].sort();
+            
+            // Устанавливаем последнюю дату по умолчанию
+            currentDate = availableDates[availableDates.length - 1];
+            document.getElementById('date-picker').value = currentDate;
+            
+            // Обновляем график
+            updateChart();
+        }
+
+        // Обновление графика
+        function updateChart() {
+            const direction = document.querySelector('input[name="direction"]:checked').value;
+            const isCurrentDate = currentDate === availableDates[availableDates.length - 1];
+            
+            // Фильтруем данные по выбранной дате
+            const filteredData = allData.filter(item => 
+                new Date(item.date).toISOString().split('T')[0] === currentDate
+            );
+            
+            // Логика обработки часов (аналогичная Streamlit)
+            let hours, xLabels, xTitle;
+            if (isCurrentDate) {
+                const lastHour = Math.max(...filteredData
+                    .filter(item => item[`${direction}`] !== '')
+                    .map(item => item.hour), 0);
+                
+                hours = Array.from({length: 24}, (_, i) => (lastHour - 23 + i + 24) % 24);
+                xLabels = hours.map(h => `${h.toString().padStart(2, '0')}:00`);
+                xTitle = `Время (последние 24 часа до ${lastHour.toString().padStart(2, '0')}:00)`;
+            } else {
+                hours = Array.from({length: 24}, (_, i) => i);
+                xLabels = hours.map(h => `${h.toString().padStart(2, '0')}:00`);
+                xTitle = "Часы (00:00-23:00)";
+            }
+            
+            // Собираем данные для графиков
+            const counts = [];
+            const waits = [];
+            
+            hours.forEach(h => {
+                const record = filteredData.find(item => item.hour === h);
+                if (record) {
+                    counts.push(parseInt(record[direction]) || 0);
+                    waits.push(parseFloat(record[`${direction}_wait`]) || 0);
+                } else {
+                    counts.push(0);
+                    waits.push(0);
                 }
+            });
+            
+            // Обновляем метрики
+            document.getElementById('total-cars').textContent = counts.reduce((a, b) => a + b, 0);
+            document.getElementById('max-wait').textContent = `${Math.max(...waits).toFixed(1)} часов`;
+            
+            // Создаем график Plotly
+            const layout = {
+                title: `Данные за ${currentDate.split('-').reverse().join('.')} | Направление: ${direction === 'to_crimea' ? 'В Крым' : 'Из Крыма'}`,
+                xaxis: { title: xTitle },
+                yaxis: { title: "Количество машин", range: [0, 1500] },
+                yaxis2: {
+                    title: "Часы ожидания",
+                    overlaying: "y",
+                    side: "right",
+                    range: [0, 5]
+                },
+                height: 500
+            };
+            
+            Plotly.newPlot('chart', [
+                {
+                    x: xLabels,
+                    y: counts,
+                    name: "Количество машин",
+                    type: 'scatter',
+                    line: { color: 'blue', width: 3 }
+                },
+                {
+                    x: xLabels,
+                    y: waits,
+                    name: "Часы ожидания",
+                    yaxis: 'y2',
+                    type: 'scatter',
+                    line: { color: 'red', width: 3 }
+                }
+            ], layout);
+        }
+        
+        // Обработчики событий
+        document.getElementById('prev-date').addEventListener('click', () => {
+            const currentIndex = availableDates.indexOf(currentDate);
+            if (currentIndex > 0) {
+                currentDate = availableDates[currentIndex - 1];
+                document.getElementById('date-picker').value = currentDate;
+                updateChart();
             }
         });
-
-        // Функция обновления графика
-        async function updateChart() {
-            try {
-                const data = await fetchData();
-                // Предполагаем, что данные в формате { labels: [...], values: [...] }
-                chart.data.labels = data.labels; // обновляем подписи
-                chart.data.datasets[0].data = data.values; // обновляем значения
-                chart.update(); // перерисовываем график
-                console.log("Данные обновлены!");
-            } catch (error) {
-                console.error("Ошибка загрузки данных:", error);
+        
+        document.getElementById('next-date').addEventListener('click', () => {
+            const currentIndex = availableDates.indexOf(currentDate);
+            if (currentIndex < availableDates.length - 1) {
+                currentDate = availableDates[currentIndex + 1];
+                document.getElementById('date-picker').value = currentDate;
+                updateChart();
             }
-            // Обновляем каждые 60 минут (60 * 60 * 1000 мс)
-            setTimeout(updateChart, 3600000);
-        }
-
-        // Запускаем первый раз
-        updateChart();
+        });
+        
+        document.getElementById('date-picker').addEventListener('change', (e) => {
+            if (availableDates.includes(e.target.value)) {
+                currentDate = e.target.value;
+                updateChart();
+            } else {
+                alert("Нет данных за выбранную дату");
+                document.getElementById('date-picker').value = currentDate;
+            }
+        });
+        
+        document.querySelectorAll('input[name="direction"]').forEach(radio => {
+            radio.addEventListener('change', updateChart);
+        });
+        
+        // Запускаем приложение
+        initApp();
+        
+        // Автообновление каждый час
+        setInterval(() => {
+            loadData().then(data => {
+                allData = data;
+                updateChart();
+            });
+        }, 3600000);
     </script>
 </body>
 </html>
