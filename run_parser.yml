@@ -1,8 +1,8 @@
-name: Run Parser at HH:02
+name: Run Parser at HH:07
 
 on:
   schedule:
-    - cron: '2 * * * *'  # Каждый час в :02 минуты (UTC)
+    - cron: '7 * * * *'  # Каждый час в :07 минуты (UTC)
   workflow_dispatch:  # Позволяет запускать вручную
 
 jobs:
