@@ -2,21 +2,23 @@ name: Run Parser at HH:02
 
 on:
   schedule:
-    - cron: '2 * * * *'  # Каждый час в :02 минуты (UTC)
-  workflow_dispatch:     # Позволяет запускать вручную
+    - cron: '2 * * * *'  # Каждый час в :02 (UTC)
+  workflow_dispatch:
 
 permissions:
-  contents: write       # Даем права на запись в репозиторий
+  contents: write  # Критически важное разрешение
 
 jobs:
   run-parser:
     runs-on: ubuntu-latest
+    environment: production  # Опционально, для лучшего трейсинга
 
     steps:
-      - name: Checkout code
+      - name: Checkout repository
         uses: actions/checkout@v4
         with:
           fetch-depth: 0  # Полная история коммитов
+          token: ${{ secrets.GITHUB_TOKEN }}  # Используем встроенный токен
 
       - name: Set up Python
         uses: actions/setup-python@v4
@@ -28,15 +30,28 @@ jobs:
           python -m pip install --upgrade pip
           pip install -r requirements.txt
 
-      - name: Run Parser
+      - name: Run parser script
         run: python parser.py
 
-      - name: Commit and Push Changes
+      - name: Commit and push changes
         run: |
+          # Настраиваем git
           git config --global user.name "GitHub Actions"
-          git config --global user.email "actions@github.com"
-          git pull --ff-only  # Синхронизируем с удаленным репозиторием
-          git add data.json   # Или другой файл, который изменяет парсер
-          git diff --quiet && git diff --staged --quiet || git commit -m "Auto-update: New data from parser [skip ci]"
-          git remote set-url origin https://github.com/${{ github.repository }}
-          git push
+          git config --global user.email "github-actions@example.com"
+          
+          # Добавляем все изменения
+          git add -A
+          
+          # Проверяем есть ли изменения для коммита
+          if git diff-index --quiet HEAD --; then
+            echo "Нет изменений для коммита"
+          else
+            # Создаем коммит
+            git commit -m "Automatic data update [skip ci]"
+            
+            # Делаем pull с rebase чтобы избежать конфликтов
+            git pull --rebase origin main
+            
+            # Пушим изменения
+            git push origin main
+          fi
