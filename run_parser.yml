@@ -1,0 +1,32 @@
+name: Run Parser at HH:02
+
+on:
+  schedule:
+    - cron: '2 * * * *'  # Каждый час в :02 минуты (UTC)
+  workflow_dispatch:  # Позволяет запускать вручную
+
+jobs:
+  run-parser:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.10'  # Укажите вашу версию Python
+
+      - name: Install dependencies
+        run: pip install -r requirements.txt  # Если есть зависимости
+
+      - name: Run Parser
+        run: python parser.py  # Запуск парсера
+
+      - name: Commit and Push Changes
+        run: |
+          git config --global user.name "GitHub Actions"
+          git config --global user.email "actions@github.com"
+          git add .  # Или укажите конкретный файл (например, data.json)
+          git commit -m "Auto-update: New data from parser"
+          git push
