@@ -117,12 +117,19 @@
             margin: 20px 0;
         }
         
-        /* Отключаем все интерактивные элементы Plotly */
+        /* Отключаем все интерактивные элементы Plotly, кроме подсказок */
         .modebar {
             display: none !important;
         }
-        .main-svg {
-            pointer-events: none !important;
+        /* Стили для подсказок */
+        .hovertext {
+            font-family: Arial, sans-serif !important;
+            font-size: 14px !important;
+            padding: 8px !important;
+            background: rgba(255, 255, 255, 0.95) !important;
+            border: 1px solid #ddd !important;
+            border-radius: 5px !important;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1) !important;
         }
     </style>
 </head>
@@ -330,26 +337,38 @@
                 document.getElementById('total-cars').textContent = counts.reduce((a, b) => a + b, 0);
                 document.getElementById('max-wait').textContent = `${Math.max(...waits).toFixed(1)} часов`;
                 
-                // Создаем график с новыми цветами
+                // Создаем график с простыми подсказками
                 Plotly.newPlot('chart', [
                     {
                         x: xLabels,
                         y: counts,
-                        name: "Количество машин",
+                        name: "Машин",
                         type: 'scatter',
                         mode: 'lines+markers',
                         line: { color: COLORS.cars, width: 3 },
-                        marker: { size: 8, color: COLORS.cars }
+                        marker: { size: 8, color: COLORS.cars },
+                        hovertemplate: '<b>%{x}</b><br>Машин: %{y}<extra></extra>',
+                        hoverlabel: {
+                            bgcolor: '#fff',
+                            bordercolor: COLORS.cars,
+                            font: { family: 'Arial', size: 14 }
+                        }
                     },
                     {
                         x: xLabels,
                         y: waits,
-                        name: "Время ожидания (часы)",
+                        name: "Ожидание (ч)",
                         yaxis: 'y2',
                         type: 'scatter',
                         mode: 'lines+markers',
                         line: { color: COLORS.wait, width: 3 },
-                        marker: { size: 8, color: COLORS.wait }
+                        marker: { size: 8, color: COLORS.wait },
+                        hovertemplate: '<b>%{x}</b><br>Ожидание: %{y} ч<extra></extra>',
+                        hoverlabel: {
+                            bgcolor: '#fff',
+                            bordercolor: COLORS.wait,
+                            font: { family: 'Arial', size: 14 }
+                        }
                     }
                 ], {
                     title: `Направление: ${directionName} | Дата: ${currentDate.split('-').reverse().join('.')}`,
@@ -376,13 +395,16 @@
                         y: 1.1
                     },
                     margin: { t: 80, l: 60, r: 60, b: 100 },
-                    hovermode: false,
+                    hovermode: 'x unified',
                     dragmode: false,
                     scrollZoom: false,
-                    showTips: false,
-                    displayModeBar: false,
-                    staticPlot: true
+                    displayModeBar: false
                 });
+                
+                // Дополнительно отключаем все возможные интерактивные элементы, кроме подсказок
+                const plot = document.getElementById('chart');
+                plot.on('plotly_click', () => false);
+                plot.on('plotly_selected', () => false);
                 
             } catch (error) {
                 console.error("Ошибка при обновлении графика:", error);
