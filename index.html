@@ -304,22 +304,15 @@
                 const directionName = direction === 'to_crimea' ? 'В Крым' : 'Из Крыма';
                 const isCurrentDate = currentDate === availableDates[availableDates.length - 1];
                 
-                // Фильтруем данные по выбранной дате
-                const filteredData = allData.filter(item => 
+                // Определяем последний час с данными
+                const dataForCurrentDate = allData.filter(item => 
                     item.date.toISOString().split('T')[0] === currentDate
                 );
                 
-                // Определяем последний час с данными для любого направления
-                const lastHourTo = Math.max(...filteredData
-                    .filter(item => item.to_crimea > 0)
-                    .map(item => item.hour), 0);
-                
-                const lastHourFrom = Math.max(...filteredData
-                    .filter(item => item.from_crimea > 0)
-                    .map(item => item.hour), 0);
-                
-                const lastHour = Math.max(lastHourTo, lastHourFrom);
-                console.log(`Последний час с данными: ${lastHour}:00`);
+                let lastHour = 0;
+                if (dataForCurrentDate.length > 0) {
+                    lastHour = Math.max(...dataForCurrentDate.map(item => item.hour));
+                }
                 
                 // Определяем диапазон часов для отображения
                 let hours, xLabels, xTitle;
@@ -334,21 +327,56 @@
                 }
                 
                 // Собираем данные для графиков
-                const counts = hours.map(h => {
-                    const record = filteredData.find(item => item.hour === h);
-                    return record ? record[direction] : 0;
-                });
+                let counts = [];
+                let waits = [];
+                let totalCars = 0;
+                let maxWait = 0;
                 
-                const waits = hours.map(h => {
-                    const record = filteredData.find(item => item.hour === h);
-                    return record ? record[`${direction}_wait`] : 0;
-                });
-                
-                console.log(`Данные для графика (${directionName}):`, counts);
+                if (isCurrentDate) {
+                    // Для текущей даты используем данные за два дня
+                    const currentIndex = availableDates.indexOf(currentDate);
+                    const prevDate = currentIndex > 0 ? availableDates[currentIndex - 1] : null;
+                    
+                    // Рассчитываем количество часов из предыдущего дня
+                    const startHour = hours[0];
+                    const prevDayHoursCount = 24 - startHour;
+                    
+                    for (let i = 0; i < 24; i++) {
+                        const hour = hours[i];
+                        const targetDate = i < prevDayHoursCount && prevDate ? prevDate : currentDate;
+                        
+                        const record = allData.find(item => 
+                            item.date.toISOString().split('T')[0] === targetDate && 
+                            item.hour === hour
+                        );
+                        
+                        const carCount = record ? record[direction] : 0;
+                        const waitTime = record ? record[`${direction}_wait`] : 0;
+                        
+                        counts.push(carCount);
+                        waits.push(waitTime);
+                        totalCars += carCount;
+                        if (waitTime > maxWait) maxWait = waitTime;
+                    }
+                } else {
+                    // Для исторических дат используем только выбранную дату
+                    for (let i = 0; i < 24; i++) {
+                        const hour = hours[i];
+                        const record = dataForCurrentDate.find(item => item.hour === hour);
+                        
+                        const carCount = record ? record[direction] : 0;
+                        const waitTime = record ? record[`${direction}_wait`] : 0;
+                        
+                        counts.push(carCount);
+                        waits.push(waitTime);
+                        totalCars += carCount;
+                        if (waitTime > maxWait) maxWait = waitTime;
+                    }
+                }
                 
                 // Обновляем метрики
-                document.getElementById('total-cars').textContent = counts.reduce((a, b) => a + b, 0);
-                document.getElementById('max-wait').textContent = `${Math.max(...waits).toFixed(1)} часов`;
+                document.getElementById('total-cars').textContent = totalCars;
+                document.getElementById('max-wait').textContent = `${maxWait.toFixed(1)} часов`;
                 
                 // Создаем график с простыми подсказками
                 Plotly.newPlot('chart', [
