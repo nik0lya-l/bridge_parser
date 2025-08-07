@@ -287,13 +287,7 @@
             }
 
             function initAvailableDates(data) {
-                const dateSet = new Set();
-                data.forEach(item => {
-                    const [day, month, year] = item.dateStr.split('.');
-                    const isoDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-                    dateSet.add(isoDate);
-                });
-                
+                const dateSet = new Set(data.map(item => item.dateStr));
                 availableDates = Array.from(dateSet).sort();
             }
 
@@ -308,8 +302,10 @@
                 dateInput.value = isoDate;
                 
                 if (availableDates.length > 0) {
-                    dateInput.min = availableDates[0];
-                    dateInput.max = availableDates[availableDates.length - 1];
+                    const firstDate = availableDates[0].split('.');
+                    const lastDate = availableDates[availableDates.length - 1].split('.');
+                    dateInput.min = `${firstDate[2]}-${firstDate[1]}-${firstDate[0]}`;
+                    dateInput.max = `${lastDate[2]}-${lastDate[1]}-${lastDate[0]}`;
                 }
             }
 
@@ -318,17 +314,13 @@
                 const nextBtn = document.getElementById('next-date');
                 if (!prevBtn || !nextBtn) return;
                 
-                // Находим текущую дату в массиве availableDates
-                const [day, month, year] = currentDate.split('.');
-                const currentIsoDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
-                const currentIndex = availableDates.indexOf(currentIsoDate);
-                
+                const currentIndex = availableDates.indexOf(currentDate);
                 prevBtn.disabled = currentIndex <= 0;
                 nextBtn.disabled = currentIndex >= availableDates.length - 1;
             }
 
             function formatDateDisplay(dateStr) {
-                return dateStr; // Оставляем в формате DD.MM.YYYY
+                return dateStr;
             }
 
             function updateMetrics(data, direction) {
@@ -345,11 +337,8 @@
                 }));
                 const maxWait = maxWaitRaw ? maxWaitRaw.toFixed(2) : "0";
 
-                const totalCarsEl = document.getElementById("total-cars");
-                const maxWaitEl = document.getElementById("max-wait");
-                
-                if (totalCarsEl) totalCarsEl.textContent = totalCars.toLocaleString('ru-RU');
-                if (maxWaitEl) maxWaitEl.textContent = `${maxWait} часов`;
+                document.getElementById("total-cars").textContent = totalCars.toLocaleString('ru-RU');
+                document.getElementById("max-wait").textContent = `${maxWait} часов`;
             }
 
             function updateChart() {
@@ -363,7 +352,17 @@
                 const isCurrentDate = currentDate === availableDates[availableDates.length - 1];
                 
                 // Фильтруем данные для текущей даты
-                const dataForCurrentDate = allData.filter(item => item.dateStr === currentDate);
+                let dataForCurrentDate = allData.filter(item => item.dateStr === currentDate);
+                
+                // Для текущей даты: определяем диапазон последних 24 часов
+                if (isCurrentDate && dataForCurrentDate.length > 0) {
+                    const lastTime = Math.max(...dataForCurrentDate.map(item => item.timeDecimal));
+                    const startHour = Math.max(0, lastTime - 24);
+                    
+                    dataForCurrentDate = dataForCurrentDate.filter(item => 
+                        item.timeDecimal >= startHour && item.timeDecimal <= lastTime
+                    );
+                }
 
                 // Сортируем данные по времени
                 dataForCurrentDate.sort((a, b) => a.timeDecimal - b.timeDecimal);
@@ -461,11 +460,8 @@
                 // Обновляем статус моста
                 const lastEvent = bridgeEvents[bridgeEvents.length - 1];
                 const bridgeStatus = lastEvent ? lastEvent.to_crimea : "Opened";
-                const bridgeStatusEl = document.getElementById("bridge-status");
-                if (bridgeStatusEl) {
-                    bridgeStatusEl.textContent = bridgeStatus === "Closed" ? "Закрыт" : "Открыт";
-                    bridgeStatusEl.style.color = bridgeStatus === "Closed" ? COLORS.closed : COLORS.opened;
-                }
+                document.getElementById("bridge-status").textContent = bridgeStatus === "Closed" ? "Закрыт" : "Открыт";
+                document.getElementById("bridge-status").style.color = bridgeStatus === "Closed" ? COLORS.closed : COLORS.opened;
 
                 // Создаем график
                 const plotData = [
@@ -576,22 +572,15 @@
                 const dateInput = document.getElementById('date-picker');
                 if (dateInput) {
                     dateInput.addEventListener('change', () => {
-                        const selectedDate = dateInput.value;
-                        const [year, month, day] = selectedDate.split('-');
-                        const formattedDate = `${day}.${month}.${year}`;
-                        
-                        // Проверяем, есть ли такая дата в данных
-                        const exists = allData.some(item => item.dateStr === formattedDate);
-                        
-                        if (exists) {
-                            currentDate = formattedDate;
+                        const selectedDate = dateInput.value.split('-').reverse().join('.');
+                        if (availableDates.includes(selectedDate)) {
+                            currentDate = selectedDate;
                             updateNavigationButtons();
                             updateChart();
                         } else {
                             alert("Данные за выбранную дату недоступны.");
-                            // Возвращаем предыдущую дату
-                            const [prevDay, prevMonth, prevYear] = currentDate.split('.');
-                            dateInput.value = `${prevYear}-${prevMonth}-${prevDay}`;
+                            const [day, month, year] = currentDate.split('.');
+                            dateInput.value = `${year}-${month}-${day}`;
                         }
                     });
                 }
@@ -599,14 +588,9 @@
                 const prevBtn = document.getElementById('prev-date');
                 if (prevBtn) {
                     prevBtn.addEventListener('click', () => {
-                        const [day, month, year] = currentDate.split('.');
-                        const currentIsoDate = `${year}-${month}-${day}`;
-                        const currentIndex = availableDates.indexOf(currentIsoDate);
-                        
-                        if (currentIndex > 0) {
-                            const prevDate = availableDates[currentIndex - 1];
-                            const [prevYear, prevMonth, prevDay] = prevDate.split('-');
-                            currentDate = `${prevDay}.${prevMonth}.${prevYear}`;
+                        const idx = availableDates.indexOf(currentDate);
+                        if (idx > 0) {
+                            currentDate = availableDates[idx - 1];
                             updateDatePicker(currentDate);
                             updateNavigationButtons();
                             updateChart();
@@ -617,14 +601,9 @@
                 const nextBtn = document.getElementById('next-date');
                 if (nextBtn) {
                     nextBtn.addEventListener('click', () => {
-                        const [day, month, year] = currentDate.split('.');
-                        const currentIsoDate = `${year}-${month}-${day}`;
-                        const currentIndex = availableDates.indexOf(currentIsoDate);
-                        
-                        if (currentIndex < availableDates.length - 1) {
-                            const nextDate = availableDates[currentIndex + 1];
-                            const [nextYear, nextMonth, nextDay] = nextDate.split('-');
-                            currentDate = `${nextDay}.${nextMonth}.${nextYear}`;
+                        const idx = availableDates.indexOf(currentDate);
+                        if (idx < availableDates.length - 1) {
+                            currentDate = availableDates[idx + 1];
                             updateDatePicker(currentDate);
                             updateNavigationButtons();
                             updateChart();
@@ -642,12 +621,7 @@
                     }
                     
                     initAvailableDates(allData);
-                    
-                    // Устанавливаем последнюю доступную дату
-                    const lastDate = availableDates[availableDates.length - 1];
-                    const [lastYear, lastMonth, lastDay] = lastDate.split('-');
-                    currentDate = `${lastDay}.${lastMonth}.${lastYear}`;
-                    
+                    currentDate = availableDates[availableDates.length - 1];
                     updateDatePicker(currentDate);
                     initControls();
                     updateNavigationButtons();
