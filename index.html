@@ -116,11 +116,9 @@
             border-radius: 5px;
             margin: 20px 0;
         }
-        /* Отключаем все интерактивные элементы Plotly, кроме подсказок */
         .modebar {
             display: none !important;
         }
-        /* Стили для подсказок */
         .hovertext {
             font-family: Arial, sans-serif !important;
             font-size: 14px !important;
@@ -129,6 +127,16 @@
             border: 1px solid #ddd !important;
             border-radius: 5px !important;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1) !important;
+        }
+        .legend-closed {
+            background-color: rgba(255, 0, 0, 0.1);
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+        .legend-opened {
+            background-color: rgba(0, 255, 0, 0.1);
+            padding: 2px 5px;
+            border-radius: 3px;
         }
     </style>
 </head>
@@ -171,6 +179,10 @@
             <div class="metric-title">Максимальное время ожидания</div>
             <div class="metric-value metric-wait" id="max-wait">0 часов</div>
         </div>
+        <div class="metric-card">
+            <div class="metric-title">Статус моста</div>
+            <div class="metric-value" id="bridge-status">Открыт</div>
+        </div>
     </div>
 
     <script>
@@ -181,8 +193,10 @@
         let currentDate = null;
 
         const COLORS = {
-            cars: "#00B4B4",  // Бирюзовый
-            wait: "#FF8C42"   // Неяркий оранжевый
+            cars: "#00B4B4",
+            wait: "#FF8C42",
+            closed: "#FF6B6B",
+            opened: "#51CF66"
         };
 
         async function loadData() {
@@ -210,14 +224,22 @@
                                     try {
                                         const [day, month, year] = row.date.split('.');
                                         const dateObj = new Date(`${year}-${month}-${day}`);
-                                        const hour = parseInt(row.time.split(':')[0]) || 0;
+                                        const timeParts = row.time.split(':');
+                                        const hour = parseInt(timeParts[0]) || 0;
+                                        const minutes = parseInt(timeParts[1]) || 0;
+                                        const isClosed = row.to_crimea === "Closed";
+                                        const isOpened = row.to_crimea === "Opened";
+                                        
                                         return {
                                             date: dateObj,
                                             hour: hour,
-                                            to_crimea: parseInt(row.to_crimea) || 0,
-                                            from_crimea: parseInt(row.from_crimea) || 0,
-                                            to_crimea_wait: parseFloat(row.to_crimea_wait) || 0,
-                                            from_crimea_wait: parseFloat(row.from_crimea_wait) || 0
+                                            minutes: minutes,
+                                            timeDecimal: hour + (minutes / 60),
+                                            to_crimea: isClosed ? "Closed" : isOpened ? "Opened" : parseInt(row.to_crimea) || 0,
+                                            from_crimea: isClosed ? "Closed" : isOpened ? "Opened" : parseInt(row.from_crimea) || 0,
+                                            to_crimea_wait: isClosed || isOpened ? 0 : parseFloat(row.to_crimea_wait) || 0,
+                                            from_crimea_wait: isClosed || isOpened ? 0 : parseFloat(row.from_crimea_wait) || 0,
+                                            isBridgeEvent: isClosed || isOpened
                                         };
                                     } catch {
                                         return null;
@@ -254,6 +276,19 @@
                 item.date.toISOString().split('T')[0] === currentDate
             );
 
+            // Получаем события закрытия/открытия моста
+            const bridgeEvents = dataForCurrentDate
+                .filter(item => item.isBridgeEvent)
+                .sort((a, b) => a.timeDecimal - b.timeDecimal);
+
+            // Определяем текущий статус моста
+            const lastEvent = bridgeEvents[bridgeEvents.length - 1];
+            const bridgeStatus = lastEvent ? lastEvent.to_crimea : "Opened";
+            document.getElementById("bridge-status").textContent = 
+                bridgeStatus === "Closed" ? "Закрыт" : "Открыт";
+            document.getElementById("bridge-status").style.color = 
+                bridgeStatus === "Closed" ? COLORS.closed : COLORS.opened;
+
             let lastHour = -1;
             let lastCars = 0;
             let lastWait = 0;
@@ -273,7 +308,7 @@
 
             // Заполняем массивы, подставляя последний известный час при пропусках
             hours.forEach(hour => {
-                const entry = dataForCurrentDate.find(d => d.hour === hour);
+                const entry = dataForCurrentDate.find(d => d.hour === hour && !d.isBridgeEvent);
                 if (entry) {
                     lastCars = direction === 'to_crimea' ? entry.to_crimea : entry.from_crimea;
                     lastWait = direction === 'to_crimea' ? entry.to_crimea_wait : entry.from_crimea_wait;
@@ -284,6 +319,89 @@
 
             // Формируем подписи оси X в формате "HH:00"
             const xLabels = hours.map(h => h.toString().padStart(2, '0') + ":00");
+
+            // Создаем массив для вертикальных линий и областей закрытия
+            const shapes = [];
+            const annotations = [];
+            let prevEvent = null;
+            
+            bridgeEvents.forEach((event, index) => {
+                // Добавляем вертикальную линию
+                shapes.push({
+                    type: 'line',
+                    xref: 'x',
+                    yref: 'paper',
+                    x0: event.timeDecimal,
+                    x1: event.timeDecimal,
+                    y0: 0,
+                    y1: 1,
+                    line: {
+                        color: event.to_crimea === 'Closed' ? COLORS.closed : COLORS.opened,
+                        width: 2,
+                        dash: 'solid'
+                    },
+                    opacity: 0.7,
+                    layer: 'below'
+                });
+
+                // Добавляем подпись
+                annotations.push({
+                    x: event.timeDecimal,
+                    y: 1,
+                    xref: 'x',
+                    yref: 'paper',
+                    text: event.to_crimea === 'Closed' ? 'Закрытие' : 'Открытие',
+                    showarrow: false,
+                    xanchor: 'center',
+                    yanchor: 'bottom',
+                    bgcolor: 'rgba(255,255,255,0.8)',
+                    bordercolor: event.to_crimea === 'Closed' ? COLORS.closed : COLORS.opened,
+                    borderwidth: 1,
+                    borderpad: 2,
+                    font: {
+                        size: 12,
+                        color: event.to_crimea === 'Closed' ? COLORS.closed : COLORS.opened
+                    }
+                });
+
+                // Добавляем закрашенную область между закрытием и открытием
+                if (prevEvent && prevEvent.to_crimea === "Closed") {
+                    shapes.push({
+                        type: 'rect',
+                        xref: 'x',
+                        yref: 'paper',
+                        x0: prevEvent.timeDecimal,
+                        x1: event.timeDecimal,
+                        y0: 0,
+                        y1: 1,
+                        fillcolor: 'rgba(255, 0, 0, 0.1)',
+                        line: {
+                            width: 0
+                        },
+                        layer: 'below'
+                    });
+                }
+                
+                prevEvent = event;
+            });
+
+            // Если последнее событие было закрытие, добавляем область до конца дня
+            if (prevEvent && prevEvent.to_crimea === "Closed") {
+                shapes.push({
+                    type: 'rect',
+                    xref: 'x',
+                    yref: 'paper',
+                    x0: prevEvent.timeDecimal,
+                    x1: Math.max(...hours) + 1,
+                    y0: 0,
+                    y1: 1,
+                    fillcolor: 'rgba(255, 0, 0, 0.1)',
+                    line: {
+                        width: 0
+                    },
+                    layer: 'below'
+                });
+            }
 
             // Строим график с двумя осями Y
             const plotData = [
@@ -354,7 +472,9 @@
                 hovermode: "x unified",
                 plot_bgcolor: '#fff',
                 paper_bgcolor: '#fff',
-                font: { family: 'Arial, sans-serif', size: 14, color: '#333' }
+                font: { family: 'Arial, sans-serif', size: 14, color: '#333' },
+                shapes: shapes,
+                annotations: annotations
             };
 
             Plotly.newPlot('chart', plotData, layout, {responsive: true, displayModeBar: false});
@@ -370,13 +490,20 @@
                 return;
             }
 
+            // Фильтруем только данные о движении (исключаем события закрытия/открытия)
+            const trafficData = data.filter(item => !item.isBridgeEvent);
+            
             // Считаем сумму машин за сутки
-            const totalCars = data.reduce((sum, item) => {
-                return sum + (direction === 'to_crimea' ? item.to_crimea : item.from_crimea);
+            const totalCars = trafficData.reduce((sum, item) => {
+                const cars = direction === 'to_crimea' ? item.to_crimea : item.from_crimea;
+                return sum + (typeof cars === 'number' ? cars : 0);
             }, 0);
 
             // Максимальное время ожидания (округляем до двух знаков)
-            const maxWaitRaw = Math.max(...data.map(item => direction === 'to_crimea' ? item.to_crimea_wait : item.from_crimea_wait));
+            const maxWaitRaw = Math.max(...trafficData.map(item => {
+                const wait = direction === 'to_crimea' ? item.to_crimea_wait : item.from_crimea_wait;
+                return typeof wait === 'number' ? wait : 0;
+            }));
             const maxWait = maxWaitRaw ? maxWaitRaw.toFixed(2) : "0";
 
             document.getElementById("total-cars").textContent = totalCars.toLocaleString('ru-RU');
@@ -384,7 +511,6 @@
         }
 
         function formatDateDisplay(dateStr) {
-            // Форматируем дату в "дд.мм.гггг"
             const d = new Date(dateStr);
             const day = d.getDate().toString().padStart(2, '0');
             const month = (d.getMonth() + 1).toString().padStart(2, '0');
@@ -394,12 +520,10 @@
 
         function updateDatePicker(dateStr) {
             const dateInput = document.getElementById("date-picker");
-            // Формат ISO yyyy-mm-dd
             dateInput.value = dateStr;
         }
 
         function initAvailableDates(data) {
-            // Получаем уникальные даты в формате ISO yyyy-mm-dd
             const dateSet = new Set(data.map(d => d.date.toISOString().split('T')[0]));
             availableDates = Array.from(dateSet).sort();
         }
@@ -457,7 +581,6 @@
                 }
                 initAvailableDates(allData);
 
-                // Начальная дата — последняя доступная (последний день с данными)
                 currentDate = availableDates[availableDates.length - 1];
 
                 updateDatePicker(currentDate);
