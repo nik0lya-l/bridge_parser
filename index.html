@@ -7,6 +7,7 @@
     <script src="https://cdn.plot.ly/plotly-2.18.2.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <style>
+        /* Стили остаются без изменений */
         body {
             font-family: Arial, sans-serif;
             max-width: 1200px;
@@ -219,28 +220,16 @@
             }
 
             function parseDateTime(dateStr, timeStr) {
-                const [day, month, year] = dateStr.split('.');
                 const [hours, minutes] = timeStr.split(':').map(Number);
-
-                // Создаем дату в UTC и добавляем 3 часа для MSK (UTC+3)
-                const date = new Date(Date.UTC(year, month-1, day, hours, minutes));
-                date.setUTCHours(date.getUTCHours() + 3);
-
-                // Корректно извлекаем компоненты для MSK
-                const moscowHours = date.getUTCHours();
-                const moscowMinutes = date.getUTCMinutes();
-                const moscowDay = String(date.getUTCDate()).padStart(2, '0');
-                const moscowMonth = String(date.getUTCMonth() + 1).padStart(2, '0');
-                const moscowYear = date.getUTCFullYear();
-
+                const timeDecimal = hours + (minutes / 60);
+                
                 return {
-                    date: date,
-                    hours: moscowHours,
-                    minutes: moscowMinutes,
-                    timeDecimal: moscowHours + (moscowMinutes / 60),
-                    displayTime: `${String(moscowHours).padStart(2, '0')}:${String(moscowMinutes).padStart(2, '0')}`,
-                    dateStr: `${moscowDay}.${moscowMonth}.${moscowYear}`,
-                    timeStr: `${String(moscowHours).padStart(2, '0')}:${String(moscowMinutes).padStart(2, '0')}`
+                    dateStr: dateStr,
+                    timeStr: timeStr,
+                    hours: hours,
+                    minutes: minutes,
+                    timeDecimal: timeDecimal,
+                    displayTime: timeStr
                 };
             }
 
@@ -299,23 +288,17 @@
             }
 
             function initAvailableDates(data) {
-                const dateSet = new Set();
-                data.forEach(item => {
-                    const dateStr = item.date.getUTCFullYear() + '-' + 
-                                   String(item.date.getUTCMonth() + 1).padStart(2, '0') + '-' + 
-                                   String(item.date.getUTCDate()).padStart(2, '0');
-                    dateSet.add(dateStr);
-                });
+                const dateSet = new Set(data.map(item => item.dateStr));
                 availableDates = Array.from(dateSet).sort();
             }
 
             function updateDatePicker(dateStr) {
                 const dateInput = document.getElementById('date-picker');
                 if (dateInput) {
-                    dateInput.value = dateStr;
+                    dateInput.value = dateStr.split('.').reverse().join('-');
                     if (availableDates.length > 0) {
-                        dateInput.min = availableDates[0];
-                        dateInput.max = availableDates[availableDates.length - 1];
+                        dateInput.min = availableDates[0].split('.').reverse().join('-');
+                        dateInput.max = availableDates[availableDates.length - 1].split('.').reverse().join('-');
                     }
                 }
             }
@@ -331,11 +314,7 @@
             }
 
             function formatDateDisplay(dateStr) {
-                const d = new Date(dateStr);
-                const day = d.getDate().toString().padStart(2, '0');
-                const month = (d.getMonth() + 1).toString().padStart(2, '0');
-                const year = d.getFullYear();
-                return `${day}.${month}.${year}`;
+                return dateStr; // Оставляем в формате DD.MM.YYYY
             }
 
             function updateMetrics(data, direction) {
@@ -369,77 +348,44 @@
                 const directionValue = direction.value;
                 const isCurrentDate = currentDate === availableDates[availableDates.length - 1];
                 
-                // Фильтруем данные для текущей даты (MSK)
-                const currentDateObj = new Date(currentDate + 'T00:00:00Z');
-                let dataForCurrentDate = allData.filter(item => {
-                    const itemDate = item.date;
-                    return itemDate.getUTCFullYear() === currentDateObj.getUTCFullYear() &&
-                           itemDate.getUTCMonth() === currentDateObj.getUTCMonth() &&
-                           itemDate.getUTCDate() === currentDateObj.getUTCDate();
-                });
+                // Фильтруем данные для текущей даты
+                const dataForCurrentDate = allData.filter(item => item.dateStr === currentDate);
 
-                // Для текущей даты: определяем последний час с данными
-                let startHour = 0;
-                let hoursToShow = 24;
+                // Сортируем данные по времени
+                dataForCurrentDate.sort((a, b) => a.timeDecimal - b.timeDecimal);
+
+                // Получаем все уникальные часы
+                const hours = [...new Set(dataForCurrentDate.map(item => item.hours))].sort((a, b) => a - b);
                 
-                if (isCurrentDate && dataForCurrentDate.length > 0) {
-                    const lastTime = Math.max(...dataForCurrentDate.map(item => item.timeDecimal));
-                    const lastHour = Math.floor(lastTime);
-                    startHour = Math.max(0, lastHour - 23);
-                    hoursToShow = lastHour - startHour + 1;
-                    
-                    // Фильтруем данные по выбранному диапазону часов
-                    dataForCurrentDate = dataForCurrentDate.filter(item => 
-                        item.timeDecimal >= startHour && item.timeDecimal <= startHour + hoursToShow
-                    );
-                }
-
-                const bridgeEvents = dataForCurrentDate
-                    .filter(item => item.isBridgeEvent)
-                    .sort((a, b) => a.timeDecimal - b.timeDecimal);
-
-                const lastEvent = bridgeEvents[bridgeEvents.length - 1];
-                const bridgeStatus = lastEvent ? lastEvent.to_crimea : "Opened";
-                const bridgeStatusEl = document.getElementById("bridge-status");
-                if (bridgeStatusEl) {
-                    bridgeStatusEl.textContent = bridgeStatus === "Closed" ? "Закрыт" : "Открыт";
-                    bridgeStatusEl.style.color = bridgeStatus === "Closed" ? COLORS.closed : COLORS.opened;
-                }
-
-                // Создаем массив часов для отображения
-                const hours = [];
-                for (let h = 0; h < hoursToShow; h++) {
-                    hours.push(startHour + h);
-                }
-                
+                // Создаем массивы для графика
+                const xLabels = [];
                 const carsArr = [];
                 const waitArr = [];
-                const xLabels = [];
-
+                
+                // Для каждого часа берем последнее значение
                 hours.forEach(hour => {
-                    const entries = dataForCurrentDate.filter(d => Math.floor(d.timeDecimal) === hour && !d.isBridgeEvent);
-                    const lastEntry = entries.length > 0 ? 
-                        entries.reduce((latest, current) => latest.timeDecimal > current.timeDecimal ? latest : current) : 
-                        null;
+                    const entries = dataForCurrentDate.filter(item => item.hours === hour);
+                    const lastEntry = entries[entries.length - 1];
                     
                     const cars = lastEntry ? 
                         (directionValue === 'to_crimea' ? lastEntry.to_crimea : lastEntry.from_crimea) : 0;
                     const wait = lastEntry ? 
                         (directionValue === 'to_crimea' ? lastEntry.to_crimea_wait : lastEntry.from_crimea_wait) : 0;
                     
+                    xLabels.push(`${String(hour).padStart(2, '0')}:00`);
                     carsArr.push(typeof cars === 'number' ? cars : 0);
                     waitArr.push(wait);
-                    xLabels.push(`${Math.floor(hour).toString().padStart(2, '0')}:00`);
                 });
 
+                // Обрабатываем события моста
+                const bridgeEvents = dataForCurrentDate.filter(item => item.isBridgeEvent);
                 const shapes = [];
                 const hoverEvents = [];
                 
-                // Обрабатываем все события закрытия/открытия
                 let isClosed = false;
                 let closedStart = 0;
                 
-                bridgeEvents.forEach((event, index) => {
+                bridgeEvents.forEach(event => {
                     const color = event.to_crimea === "Closed" ? COLORS.closed : COLORS.opened;
                     
                     shapes.push({
@@ -462,12 +408,10 @@
                         color: color
                     });
 
-                    // Если мост закрывается, запоминаем время начала
                     if (event.to_crimea === "Closed" && !isClosed) {
                         isClosed = true;
                         closedStart = event.timeDecimal;
                     }
-                    // Если мост открывается и был закрыт, закрашиваем период
                     else if (event.to_crimea === "Opened" && isClosed) {
                         shapes.push({
                             type: 'rect',
@@ -485,14 +429,13 @@
                     }
                 });
 
-                // Если последнее событие - закрытие, закрашиваем до конца графика
                 if (isClosed) {
                     shapes.push({
                         type: 'rect',
                         xref: 'x',
                         yref: 'paper',
                         x0: closedStart,
-                        x1: startHour + hoursToShow,
+                        x1: 24,
                         y0: 0,
                         y1: 1,
                         fillcolor: 'rgba(255, 0, 0, 0.1)',
@@ -501,6 +444,16 @@
                     });
                 }
 
+                // Обновляем статус моста
+                const lastEvent = bridgeEvents[bridgeEvents.length - 1];
+                const bridgeStatus = lastEvent ? lastEvent.to_crimea : "Opened";
+                const bridgeStatusEl = document.getElementById("bridge-status");
+                if (bridgeStatusEl) {
+                    bridgeStatusEl.textContent = bridgeStatus === "Closed" ? "Закрыт" : "Открыт";
+                    bridgeStatusEl.style.color = bridgeStatus === "Closed" ? COLORS.closed : COLORS.opened;
+                }
+
+                // Создаем график
                 const plotData = [
                     {
                         x: xLabels,
@@ -527,7 +480,7 @@
                 ];
 
                 const layout = {
-                    title: `Движение ${directionValue === 'to_crimea' ? 'в Крым' : 'из Крыма'} за ${formatDateDisplay(currentDate)}`,
+                    title: `Движение ${directionValue === 'to_crimea' ? 'в Крым' : 'из Крыма'} за ${currentDate}`,
                     xaxis: {
                         title: "Время (часы)",
                         tickangle: -45,
@@ -566,9 +519,14 @@
 
                 Plotly.newPlot(chartEl, plotData, layout, {responsive: true, displayModeBar: false});
 
+                // Обработчики событий наведения
                 chartEl.on('plotly_hover', function(data) {
                     const xVal = data.points[0].x;
-                    const hoverEvent = hoverEvents.find(e => Math.abs(e.x - xVal) < 0.5);
+                    const hoverEvent = hoverEvents.find(e => {
+                        const eventHour = Math.floor(e.x);
+                        const labelHour = parseInt(xVal.split(':')[0]);
+                        return eventHour === labelHour;
+                    });
                     
                     if (hoverEvent) {
                         Plotly.relayout(chartEl, {
@@ -604,14 +562,14 @@
                 const dateInput = document.getElementById('date-picker');
                 if (dateInput) {
                     dateInput.addEventListener('change', () => {
-                        const selectedDate = dateInput.value;
+                        const selectedDate = dateInput.value.split('-').reverse().join('.');
                         if (availableDates.includes(selectedDate)) {
                             currentDate = selectedDate;
                             updateNavigationButtons();
                             updateChart();
                         } else {
                             alert("Данные за выбранную дату недоступны.");
-                            dateInput.value = currentDate;
+                            dateInput.value = currentDate.split('.').reverse().join('-');
                         }
                     });
                 }
