@@ -220,17 +220,27 @@
 
             function parseDateTime(dateStr, timeStr) {
                 const [day, month, year] = dateStr.split('.');
-                const [hours, minutes] = timeStr.split(':');
-                
-                // Создаем дату в московском времени (UTC+3)
-                const date = new Date(Date.UTC(year, month-1, day, hours-3, minutes));
-                
+                const [hours, minutes] = timeStr.split(':').map(Number);
+
+                // Создаем дату в UTC и добавляем 3 часа для MSK (UTC+3)
+                const date = new Date(Date.UTC(year, month-1, day, hours, minutes));
+                date.setUTCHours(date.getUTCHours() + 3);
+
+                // Корректно извлекаем компоненты для MSK
+                const moscowHours = date.getUTCHours();
+                const moscowMinutes = date.getUTCMinutes();
+                const moscowDay = String(date.getUTCDate()).padStart(2, '0');
+                const moscowMonth = String(date.getUTCMonth() + 1).padStart(2, '0');
+                const moscowYear = date.getUTCFullYear();
+
                 return {
                     date: date,
-                    hours: parseInt(hours),
-                    minutes: parseInt(minutes),
-                    timeDecimal: parseFloat(hours) + (parseFloat(minutes) / 60),
-                    displayTime: timeStr
+                    hours: moscowHours,
+                    minutes: moscowMinutes,
+                    timeDecimal: moscowHours + (moscowMinutes / 60),
+                    displayTime: `${String(moscowHours).padStart(2, '0')}:${String(moscowMinutes).padStart(2, '0')}`,
+                    dateStr: `${moscowDay}.${moscowMonth}.${moscowYear}`,
+                    timeStr: `${String(moscowHours).padStart(2, '0')}:${String(moscowMinutes).padStart(2, '0')}`
                 };
             }
 
@@ -258,8 +268,6 @@
                                             
                                             return {
                                                 ...dt,
-                                                dateStr: row.date,
-                                                timeStr: row.time,
                                                 to_crimea: row.to_crimea === "Closed" ? "Closed" : 
                                                           row.to_crimea === "Opened" ? "Opened" : 
                                                           parseInt(row.to_crimea) || 0,
@@ -293,9 +301,9 @@
             function initAvailableDates(data) {
                 const dateSet = new Set();
                 data.forEach(item => {
-                    const dateStr = item.date.getFullYear() + '-' + 
-                                   String(item.date.getMonth() + 1).padStart(2, '0') + '-' + 
-                                   String(item.date.getDate()).padStart(2, '0');
+                    const dateStr = item.date.getUTCFullYear() + '-' + 
+                                   String(item.date.getUTCMonth() + 1).padStart(2, '0') + '-' + 
+                                   String(item.date.getUTCDate()).padStart(2, '0');
                     dateSet.add(dateStr);
                 });
                 availableDates = Array.from(dateSet).sort();
@@ -360,27 +368,31 @@
                 
                 const directionValue = direction.value;
                 const isCurrentDate = currentDate === availableDates[availableDates.length - 1];
-                const now = new Date();
-                const currentHour = now.getHours();
-                const currentMinute = now.getMinutes();
+                
+                // Фильтруем данные для текущей даты (MSK)
+                const currentDateObj = new Date(currentDate + 'T00:00:00Z');
+                let dataForCurrentDate = allData.filter(item => {
+                    const itemDate = item.date;
+                    return itemDate.getUTCFullYear() === currentDateObj.getUTCFullYear() &&
+                           itemDate.getUTCMonth() === currentDateObj.getUTCMonth() &&
+                           itemDate.getUTCDate() === currentDateObj.getUTCDate();
+                });
 
-                // Для текущей даты показываем последние 24 часа
+                // Для текущей даты: определяем последний час с данными
                 let startHour = 0;
                 let hoursToShow = 24;
                 
-                if (isCurrentDate) {
-                    startHour = (currentHour - 23) >= 0 ? (currentHour - 23) : 0;
-                    hoursToShow = currentHour - startHour + 1;
+                if (isCurrentDate && dataForCurrentDate.length > 0) {
+                    const lastTime = Math.max(...dataForCurrentDate.map(item => item.timeDecimal));
+                    const lastHour = Math.floor(lastTime);
+                    startHour = Math.max(0, lastHour - 23);
+                    hoursToShow = lastHour - startHour + 1;
+                    
+                    // Фильтруем данные по выбранному диапазону часов
+                    dataForCurrentDate = dataForCurrentDate.filter(item => 
+                        item.timeDecimal >= startHour && item.timeDecimal <= startHour + hoursToShow
+                    );
                 }
-
-                const currentDateObj = new Date(currentDate + 'T00:00:00');
-                const dataForCurrentDate = allData.filter(item => {
-                    const itemDate = new Date(item.date);
-                    return itemDate.getFullYear() === currentDateObj.getFullYear() &&
-                           itemDate.getMonth() === currentDateObj.getMonth() &&
-                           itemDate.getDate() === currentDateObj.getDate() &&
-                           item.hours >= startHour;
-                });
 
                 const bridgeEvents = dataForCurrentDate
                     .filter(item => item.isBridgeEvent)
@@ -394,14 +406,21 @@
                     bridgeStatusEl.style.color = bridgeStatus === "Closed" ? COLORS.closed : COLORS.opened;
                 }
 
-                const hours = Array.from({length: hoursToShow}, (_, i) => startHour + i);
-                const xLabels = hours.map(h => `${h.toString().padStart(2, '0')}:00`);
+                // Создаем массив часов для отображения
+                const hours = [];
+                for (let h = 0; h < hoursToShow; h++) {
+                    hours.push(startHour + h);
+                }
+                
                 const carsArr = [];
                 const waitArr = [];
+                const xLabels = [];
 
                 hours.forEach(hour => {
-                    const entries = dataForCurrentDate.filter(d => d.hours === hour && !d.isBridgeEvent);
-                    const lastEntry = entries[entries.length - 1];
+                    const entries = dataForCurrentDate.filter(d => Math.floor(d.timeDecimal) === hour && !d.isBridgeEvent);
+                    const lastEntry = entries.length > 0 ? 
+                        entries.reduce((latest, current) => latest.timeDecimal > current.timeDecimal ? latest : current) : 
+                        null;
                     
                     const cars = lastEntry ? 
                         (directionValue === 'to_crimea' ? lastEntry.to_crimea : lastEntry.from_crimea) : 0;
@@ -410,6 +429,7 @@
                     
                     carsArr.push(typeof cars === 'number' ? cars : 0);
                     waitArr.push(wait);
+                    xLabels.push(`${Math.floor(hour).toString().padStart(2, '0')}:00`);
                 });
 
                 const shapes = [];
