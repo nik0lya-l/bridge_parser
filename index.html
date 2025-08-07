@@ -1,65 +1,136 @@
-import pandas as pd
-import streamlit as st
-import matplotlib.pyplot as plt
-from datetime import datetime
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+  <meta charset="UTF-8" />
+  <title>График движения через мост</title>
+  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; padding: 20px; }
+    #controls { margin-bottom: 20px; }
+    label { margin-right: 10px; }
+  </style>
+</head>
+<body>
+  <h1>Движение через Крымский мост</h1>
+  <div id="controls">
+    <label for="direction">Направление:</label>
+    <select id="direction">
+      <option value="to_crimea">в Крым</option>
+      <option value="from_crimea">из Крыма</option>
+    </select>
 
-# Загрузка данных
-@st.cache_data
-def load_data():
-    df = pd.read_csv("crimea_bridge.csv")
-    df['datetime'] = pd.to_datetime(df['date'] + ' ' + df['time'], format='%d.%m.%Y %H:%M')
-    return df.sort_values('datetime')
+    <label for="date">Дата:</label>
+    <input type="date" id="date" />
+  </div>
+  <div id="chart"></div>
 
-df = load_data()
+  <script>
+    let rawData;
 
-# Выбор направления
-direction = st.radio("Выберите направление:", ["в Крым", "из Крыма"])
+    async function loadData() {
+      const response = await fetch('crimea_bridge.json');
+      rawData = await response.json();
+      updateChart();
+    }
 
-# Выбор даты
-selected_date = st.date_input("Выберите дату:", value=df['datetime'].dt.date.max(), format="DD.MM.YYYY")
+    function updateChart() {
+      const direction = document.getElementById('direction').value;
+      const selectedDate = document.getElementById('date').value;
 
-# Фильтрация по дате
-filtered = df[df['datetime'].dt.date == selected_date]
+      const filtered = rawData.filter(d => d.date === formatDate(selectedDate));
 
-if direction == "в Крым":
-    count_col = 'to_crimea'
-    wait_col = 'to_crimea_wait'
-else:
-    count_col = 'from_crimea'
-    wait_col = 'from_crimea_wait'
+      const times = filtered.map(d => d.time);
+      const datetimes = filtered.map(d => `${d.date} ${d.time}`);
+      const counts = filtered.map(d => {
+        const val = d[direction];
+        return (val === "Closed" || val === "Opened") ? null : +val;
+      });
+      const waits = filtered.map(d => {
+        const val = d[direction + '_wait'];
+        return (val === null || val === undefined) ? null : +val;
+      });
 
-# Преобразование значений
-def to_number(val):
-    try:
-        return float(val)
-    except:
-        return None
+      const closedLines = filtered
+        .filter(d => d[direction] === "Closed" || d[direction] === "Opened")
+        .map(d => ({
+          type: 'line',
+          x0: `${d.date} ${d.time}`,
+          x1: `${d.date} ${d.time}`,
+          y0: 0,
+          y1: 1,
+          yref: 'paper',
+          line: {
+            color: d[direction] === "Closed" ? 'black' : 'green',
+            width: 2,
+            dash: 'dot'
+          }
+        }));
 
-filtered['count'] = filtered[count_col].apply(to_number)
-filtered['wait'] = filtered[wait_col].apply(to_number)
+      const annotations = filtered
+        .filter(d => d[direction] === "Closed" || d[direction] === "Opened")
+        .map(d => ({
+          x: `${d.date} ${d.time}`,
+          y: 1.02,
+          yref: 'paper',
+          text: d[direction] === "Closed" ? "Мост закрыт" : "Мост открыт",
+          showarrow: false,
+          font: {
+            color: d[direction] === "Closed" ? 'black' : 'green'
+          }
+        }));
 
-# Создание графика
-fig, ax1 = plt.subplots(figsize=(10, 5))
+      const trace1 = {
+        x: datetimes,
+        y: counts,
+        name: 'Количество машин',
+        mode: 'lines+markers',
+        marker: { color: 'blue' },
+        yaxis: 'y1'
+      };
 
-ax1.set_title(f"Движение {direction.lower()} за {selected_date.strftime('%d.%m.%Y')}")
-ax1.set_xlabel("Время")
-ax1.set_ylabel("Количество машин", color='blue')
-ax1.plot(filtered['datetime'], filtered['count'], label="Количество машин", marker='o')
-ax1.tick_params(axis='y', labelcolor='blue')
+      const trace2 = {
+        x: datetimes,
+        y: waits,
+        name: 'Ожидание (часы)',
+        mode: 'lines+markers',
+        marker: { color: 'red' },
+        yaxis: 'y2'
+      };
 
-# Вторая ось — время ожидания
-ax2 = ax1.twinx()
-ax2.set_ylabel("Ожидание (часы)", color='red')
-ax2.plot(filtered['datetime'], filtered['wait'], label="Ожидание", color='red', linestyle='--', marker='x')
-ax2.tick_params(axis='y', labelcolor='red')
+      const layout = {
+        title: `Движение ${direction === 'to_crimea' ? 'в Крым' : 'из Крыма'} за ${formatDate(selectedDate)}`,
+        xaxis: { title: 'Время' },
+        yaxis: { title: 'Количество машин', color: 'blue' },
+        yaxis2: {
+          title: 'Ожидание (часы)',
+          overlaying: 'y',
+          side: 'right',
+          color: 'red'
+        },
+        shapes: closedLines,
+        annotations: annotations,
+        margin: { t: 60 }
+      };
 
-# Добавим вертикальные линии для событий "Мост закрыт/открыт"
-for i, row in filtered.iterrows():
-    if row[count_col] == "Closed":
-        ax1.axvline(row['datetime'], color='black', linestyle='--', alpha=0.7)
-        ax1.text(row['datetime'], ax1.get_ylim()[1]*0.9, "Мост закрыт", rotation=90, verticalalignment='top', color='black')
-    elif row[count_col] == "Opened":
-        ax1.axvline(row['datetime'], color='green', linestyle='--', alpha=0.7)
-        ax1.text(row['datetime'], ax1.get_ylim()[1]*0.9, "Мост открыт", rotation=90, verticalalignment='top', color='green')
+      Plotly.newPlot('chart', [trace1, trace2], layout);
+    }
 
-st.pyplot(fig)
+    function formatDate(dateStr) {
+      const d = new Date(dateStr);
+      const day = String(d.getDate()).padStart(2, '0');
+      const month = String(d.getMonth() + 1).padStart(2, '0');
+      const year = d.getFullYear();
+      return `${day}.${month}.${year}`;
+    }
+
+    document.getElementById('direction').addEventListener('change', updateChart);
+    document.getElementById('date').addEventListener('change', updateChart);
+
+    window.onload = () => {
+      const latestDate = new Date().toISOString().split('T')[0];
+      document.getElementById('date').value = latestDate;
+      loadData();
+    };
+  </script>
+</body>
+</html>
