@@ -1,136 +1,476 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-  <meta charset="UTF-8" />
-  <title>График движения через мост</title>
-  <script src="https://cdn.plot.ly/plotly-latest.min.js"></script>
-  <style>
-    body { font-family: Arial, sans-serif; padding: 20px; }
-    #controls { margin-bottom: 20px; }
-    label { margin-right: 10px; }
-  </style>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Крымский мост - статистика</title>
+    <!-- Подключаем Plotly.js (актуальная версия) -->
+    <script src="https://cdn.plot.ly/plotly-2.18.2.min.js"></script>
+    <!-- Подключаем PapaParse для работы с CSV -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .direction-selector {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .direction-options {
+            display: flex;
+            gap: 15px;
+        }
+        .date-nav {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .nav-button {
+            padding: 8px 15px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        .nav-button:hover:not(:disabled) {
+            background-color: #45a049;
+        }
+        .nav-button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #date-picker {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        .metrics {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin: 30px 0;
+            flex-wrap: wrap;
+        }
+        .metric-card {
+            background-color: #fff;
+            border-radius: 10px;
+            padding: 20px;
+            min-width: 250px;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .metric-title {
+            font-size: 16px;
+            color: #555;
+            margin-bottom: 10px;
+        }
+        .metric-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #1f77b4;
+        }
+        .metric-wait {
+            color: #ff7f0e;
+        }
+        #chart {
+            height: 550px;
+            width: 100%;
+            background-color: #fff;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .error-message {
+            color: red;
+            text-align: center;
+            padding: 20px;
+            background-color: #ffeeee;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        /* Отключаем все интерактивные элементы Plotly, кроме подсказок */
+        .modebar {
+            display: none !important;
+        }
+        /* Стили для подсказок */
+        .hovertext {
+            font-family: Arial, sans-serif !important;
+            font-size: 14px !important;
+            padding: 8px !important;
+            background: rgba(255, 255, 255, 0.95) !important;
+            border: 1px solid #ddd !important;
+            border-radius: 5px !important;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1) !important;
+        }
+    </style>
 </head>
 <body>
-  <h1>Движение через Крымский мост</h1>
-  <div id="controls">
-    <label for="direction">Направление:</label>
-    <select id="direction">
-      <option value="to_crimea">в Крым</option>
-      <option value="from_crimea">из Крыма</option>
-    </select>
+    <div class="header">
+        <h1>Статистика движения по Крымскому мосту</h1>
+        <p>Актуальные данные о количестве машин и времени ожидания</p>
+    </div>
 
-    <label for="date">Дата:</label>
-    <input type="date" id="date" />
-  </div>
-  <div id="chart"></div>
+    <div class="controls">
+        <div class="direction-selector">
+            <label><strong>Направление движения:</strong></label>
+            <div class="direction-options">
+                <label>
+                    <input type="radio" id="to_crimea" name="direction" value="to_crimea" checked />
+                    В Крым
+                </label>
+                <label>
+                    <input type="radio" id="from_crimea" name="direction" value="from_crimea" />
+                    Из Крыма
+                </label>
+            </div>
+        </div>
 
-  <script>
-    let rawData;
+        <div class="date-nav">
+            <button class="nav-button" id="prev-date" title="Предыдущий день">←</button>
+            <input type="date" id="date-picker" />
+            <button class="nav-button" id="next-date" title="Следующий день">→</button>
+        </div>
+    </div>
 
-    async function loadData() {
-      const response = await fetch('crimea_bridge.json');
-      rawData = await response.json();
-      updateChart();
-    }
+    <div id="chart"></div>
 
-    function updateChart() {
-      const direction = document.getElementById('direction').value;
-      const selectedDate = document.getElementById('date').value;
+    <div class="metrics">
+        <div class="metric-card">
+            <div class="metric-title">Всего машин за сутки</div>
+            <div class="metric-value" id="total-cars">0</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-title">Максимальное время ожидания</div>
+            <div class="metric-value metric-wait" id="max-wait">0 часов</div>
+        </div>
+    </div>
 
-      const filtered = rawData.filter(d => d.date === formatDate(selectedDate));
+    <script>
+        const DATA_URL = "https://raw.githubusercontent.com/nik0lya-l/bridge_parser/main/crimea_bridge.csv";
 
-      const times = filtered.map(d => d.time);
-      const datetimes = filtered.map(d => `${d.date} ${d.time}`);
-      const counts = filtered.map(d => {
-        const val = d[direction];
-        return (val === "Closed" || val === "Opened") ? null : +val;
-      });
-      const waits = filtered.map(d => {
-        const val = d[direction + '_wait'];
-        return (val === null || val === undefined) ? null : +val;
-      });
+        let allData = [];
+        let availableDates = [];
+        let currentDate = null;
 
-      const closedLines = filtered
-        .filter(d => d[direction] === "Closed" || d[direction] === "Opened")
-        .map(d => ({
-          type: 'line',
-          x0: `${d.date} ${d.time}`,
-          x1: `${d.date} ${d.time}`,
-          y0: 0,
-          y1: 1,
-          yref: 'paper',
-          line: {
-            color: d[direction] === "Closed" ? 'black' : 'green',
-            width: 2,
-            dash: 'dot'
-          }
-        }));
+        const COLORS = {
+            cars: "#00B4B4",  // Бирюзовый
+            wait: "#FF8C42"   // Неяркий оранжевый
+        };
 
-      const annotations = filtered
-        .filter(d => d[direction] === "Closed" || d[direction] === "Opened")
-        .map(d => ({
-          x: `${d.date} ${d.time}`,
-          y: 1.02,
-          yref: 'paper',
-          text: d[direction] === "Closed" ? "Мост закрыт" : "Мост открыт",
-          showarrow: false,
-          font: {
-            color: d[direction] === "Closed" ? 'black' : 'green'
-          }
-        }));
+        async function loadData() {
+            try {
+                const response = await fetch(DATA_URL);
+                if (!response.ok) {
+                    throw new Error(`Ошибка HTTP! Статус: ${response.status}`);
+                }
+                const text = await response.text();
+                return new Promise((resolve, reject) => {
+                    Papa.parse(text, {
+                        header: true,
+                        skipEmptyLines: true,
+                        complete: (results) => {
+                            if (results.errors.length > 0) {
+                                console.warn("Ошибки парсинга CSV:", results.errors);
+                            }
+                            if (!results.data || results.data.length === 0) {
+                                reject(new Error("CSV файл не содержит данных"));
+                                return;
+                            }
+                            const processedData = results.data
+                                .filter(row => row.date && row.time)
+                                .map(row => {
+                                    try {
+                                        const [day, month, year] = row.date.split('.');
+                                        const dateObj = new Date(`${year}-${month}-${day}`);
+                                        const hour = parseInt(row.time.split(':')[0]) || 0;
+                                        return {
+                                            date: dateObj,
+                                            hour: hour,
+                                            to_crimea: parseInt(row.to_crimea) || 0,
+                                            from_crimea: parseInt(row.from_crimea) || 0,
+                                            to_crimea_wait: parseFloat(row.to_crimea_wait) || 0,
+                                            from_crimea_wait: parseFloat(row.from_crimea_wait) || 0
+                                        };
+                                    } catch {
+                                        return null;
+                                    }
+                                })
+                                .filter(Boolean);
+                            resolve(processedData);
+                        },
+                        error: (error) => {
+                            reject(new Error(`Ошибка парсинга CSV: ${error.message}`));
+                        }
+                    });
+                });
+            } catch (error) {
+                throw error;
+            }
+        }
 
-      const trace1 = {
-        x: datetimes,
-        y: counts,
-        name: 'Количество машин',
-        mode: 'lines+markers',
-        marker: { color: 'blue' },
-        yaxis: 'y1'
-      };
+        function updateNavigationButtons() {
+            const prevBtn = document.getElementById('prev-date');
+            const nextBtn = document.getElementById('next-date');
+            const currentIndex = availableDates.indexOf(currentDate);
+            prevBtn.disabled = currentIndex <= 0;
+            nextBtn.disabled = currentIndex >= availableDates.length - 1;
+        }
 
-      const trace2 = {
-        x: datetimes,
-        y: waits,
-        name: 'Ожидание (часы)',
-        mode: 'lines+markers',
-        marker: { color: 'red' },
-        yaxis: 'y2'
-      };
+        function updateChart() {
+            if (!allData || allData.length === 0) return;
 
-      const layout = {
-        title: `Движение ${direction === 'to_crimea' ? 'в Крым' : 'из Крыма'} за ${formatDate(selectedDate)}`,
-        xaxis: { title: 'Время' },
-        yaxis: { title: 'Количество машин', color: 'blue' },
-        yaxis2: {
-          title: 'Ожидание (часы)',
-          overlaying: 'y',
-          side: 'right',
-          color: 'red'
-        },
-        shapes: closedLines,
-        annotations: annotations,
-        margin: { t: 60 }
-      };
+            const direction = document.querySelector('input[name="direction"]:checked').value;
+            const isCurrentDate = currentDate === availableDates[availableDates.length - 1];
 
-      Plotly.newPlot('chart', [trace1, trace2], layout);
-    }
+            const dataForCurrentDate = allData.filter(item =>
+                item.date.toISOString().split('T')[0] === currentDate
+            );
 
-    function formatDate(dateStr) {
-      const d = new Date(dateStr);
-      const day = String(d.getDate()).padStart(2, '0');
-      const month = String(d.getMonth() + 1).padStart(2, '0');
-      const year = d.getFullYear();
-      return `${day}.${month}.${year}`;
-    }
+            let lastHour = -1;
+            let lastCars = 0;
+            let lastWait = 0;
 
-    document.getElementById('direction').addEventListener('change', updateChart);
-    document.getElementById('date').addEventListener('change', updateChart);
+            // Создаем 24 часа, с 0 по 23
+            let hours = [...Array(24).keys()];
 
-    window.onload = () => {
-      const latestDate = new Date().toISOString().split('T')[0];
-      document.getElementById('date').value = latestDate;
-      loadData();
-    };
-  </script>
+            // Если сегодня — до текущего часа, иначе 0-23
+            if (isCurrentDate) {
+                const now = new Date();
+                lastHour = now.getHours();
+                hours = hours.filter(h => h <= lastHour);
+            }
+
+            let carsArr = [];
+            let waitArr = [];
+
+            // Заполняем массивы, подставляя последний известный час при пропусках
+            hours.forEach(hour => {
+                const entry = dataForCurrentDate.find(d => d.hour === hour);
+                if (entry) {
+                    lastCars = direction === 'to_crimea' ? entry.to_crimea : entry.from_crimea;
+                    lastWait = direction === 'to_crimea' ? entry.to_crimea_wait : entry.from_crimea_wait;
+                }
+                carsArr.push(lastCars);
+                waitArr.push(lastWait);
+            });
+
+            // Формируем подписи оси X в формате "HH:00"
+            const xLabels = hours.map(h => h.toString().padStart(2, '0') + ":00");
+
+            // Строим график с двумя осями Y
+            const plotData = [
+                {
+                    x: xLabels,
+                    y: carsArr,
+                    name: "Машины",
+                    type: "scatter",
+                    mode: "lines+markers",
+                    marker: { color: COLORS.cars },
+                    line: { color: COLORS.cars },
+                    yaxis: "y1",
+                    hovertemplate: '%{y} машин<br>%{x}<extra></extra>'
+                },
+                {
+                    x: xLabels,
+                    y: waitArr,
+                    name: "Время ожидания (ч)",
+                    type: "scatter",
+                    mode: "lines+markers",
+                    marker: { color: COLORS.wait },
+                    line: { color: COLORS.wait, dash: 'dot' },
+                    yaxis: "y2",
+                    hovertemplate: '%{y:.2f} ч.<br>%{x}<extra></extra>'
+                }
+            ];
+
+            const layout = {
+                title: `Движение ${direction === 'to_crimea' ? 'в Крым' : 'из Крыма'} за ${formatDateDisplay(currentDate)}`,
+                xaxis: {
+                    title: "Время (часы)",
+                    tickangle: -45,
+                    tickmode: "array",
+                    tickvals: xLabels,
+                    tickfont: { size: 12 },
+                    showgrid: false,
+                    zeroline: false
+                },
+                yaxis: {
+                    title: "Количество машин",
+                    side: "left",
+                    showgrid: true,
+                    zeroline: true,
+                    zerolinewidth: 1,
+                    zerolinecolor: "#ddd",
+                    rangemode: "tozero"
+                },
+                yaxis2: {
+                    title: "Время ожидания (часы)",
+                    side: "right",
+                    overlaying: "y",
+                    showgrid: false,
+                    zeroline: false,
+                    rangemode: "tozero"
+                },
+                legend: {
+                    x: 0,
+                    y: 1.15,
+                    orientation: "h",
+                    font: { size: 14 }
+                },
+                margin: {
+                    t: 60,
+                    b: 100,
+                    l: 70,
+                    r: 70
+                },
+                hovermode: "x unified",
+                plot_bgcolor: '#fff',
+                paper_bgcolor: '#fff',
+                font: { family: 'Arial, sans-serif', size: 14, color: '#333' }
+            };
+
+            Plotly.newPlot('chart', plotData, layout, {responsive: true, displayModeBar: false});
+
+            // Обновляем метрики под графиком
+            updateMetrics(dataForCurrentDate, direction);
+        }
+
+        function updateMetrics(data, direction) {
+            if (!data || data.length === 0) {
+                document.getElementById("total-cars").textContent = "Нет данных";
+                document.getElementById("max-wait").textContent = "Нет данных";
+                return;
+            }
+
+            // Считаем сумму машин за сутки
+            const totalCars = data.reduce((sum, item) => {
+                return sum + (direction === 'to_crimea' ? item.to_crimea : item.from_crimea);
+            }, 0);
+
+            // Максимальное время ожидания (округляем до двух знаков)
+            const maxWaitRaw = Math.max(...data.map(item => direction === 'to_crimea' ? item.to_crimea_wait : item.from_crimea_wait));
+            const maxWait = maxWaitRaw ? maxWaitRaw.toFixed(2) : "0";
+
+            document.getElementById("total-cars").textContent = totalCars.toLocaleString('ru-RU');
+            document.getElementById("max-wait").textContent = `${maxWait} часов`;
+        }
+
+        function formatDateDisplay(dateStr) {
+            // Форматируем дату в "дд.мм.гггг"
+            const d = new Date(dateStr);
+            const day = d.getDate().toString().padStart(2, '0');
+            const month = (d.getMonth() + 1).toString().padStart(2, '0');
+            const year = d.getFullYear();
+            return `${day}.${month}.${year}`;
+        }
+
+        function updateDatePicker(dateStr) {
+            const dateInput = document.getElementById("date-picker");
+            // Формат ISO yyyy-mm-dd
+            dateInput.value = dateStr;
+        }
+
+        function initAvailableDates(data) {
+            // Получаем уникальные даты в формате ISO yyyy-mm-dd
+            const dateSet = new Set(data.map(d => d.date.toISOString().split('T')[0]));
+            availableDates = Array.from(dateSet).sort();
+        }
+
+        function initControls() {
+            const directionRadios = document.querySelectorAll('input[name="direction"]');
+            directionRadios.forEach(radio => {
+                radio.addEventListener('change', () => {
+                    updateChart();
+                });
+            });
+
+            const dateInput = document.getElementById("date-picker");
+            dateInput.min = availableDates[0];
+            dateInput.max = availableDates[availableDates.length - 1];
+
+            dateInput.addEventListener('change', () => {
+                if (availableDates.includes(dateInput.value)) {
+                    currentDate = dateInput.value;
+                    updateNavigationButtons();
+                    updateChart();
+                } else {
+                    alert("Данные за выбранную дату недоступны.");
+                    dateInput.value = currentDate;
+                }
+            });
+
+            document.getElementById("prev-date").addEventListener('click', () => {
+                let idx = availableDates.indexOf(currentDate);
+                if (idx > 0) {
+                    currentDate = availableDates[idx - 1];
+                    updateDatePicker(currentDate);
+                    updateNavigationButtons();
+                    updateChart();
+                }
+            });
+
+            document.getElementById("next-date").addEventListener('click', () => {
+                let idx = availableDates.indexOf(currentDate);
+                if (idx < availableDates.length - 1) {
+                    currentDate = availableDates[idx + 1];
+                    updateDatePicker(currentDate);
+                    updateNavigationButtons();
+                    updateChart();
+                }
+            });
+        }
+
+        async function init() {
+            try {
+                allData = await loadData();
+                if (allData.length === 0) {
+                    document.body.innerHTML = `<div class="error-message">Данные не загружены или отсутствуют.</div>`;
+                    return;
+                }
+                initAvailableDates(allData);
+
+                // Начальная дата — последняя доступная (последний день с данными)
+                currentDate = availableDates[availableDates.length - 1];
+
+                updateDatePicker(currentDate);
+                initControls();
+                updateNavigationButtons();
+                updateChart();
+
+            } catch (error) {
+                document.body.innerHTML = `<div class="error-message">Ошибка загрузки данных: ${error.message}</div>`;
+            }
+        }
+
+        init();
+    </script>
 </body>
 </html>
