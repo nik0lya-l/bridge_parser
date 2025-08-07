@@ -288,7 +288,12 @@
 
             function initAvailableDates(data) {
                 const dateSet = new Set(data.map(item => item.dateStr));
-                availableDates = Array.from(dateSet).sort();
+                availableDates = Array.from(dateSet).sort((a, b) => {
+                    // Исправленная сортировка дат в формате DD.MM.YYYY
+                    const [aDay, aMonth, aYear] = a.split('.').map(Number);
+                    const [bDay, bMonth, bYear] = b.split('.').map(Number);
+                    return new Date(aYear, aMonth-1, aDay) - new Date(bYear, bMonth-1, bDay);
+                });
             }
 
             function updateDatePicker(dateStr) {
@@ -302,10 +307,12 @@
                 dateInput.value = isoDate;
                 
                 if (availableDates.length > 0) {
+                    // Корректное определение минимальной и максимальной дат
                     const firstDate = availableDates[0].split('.');
                     const lastDate = availableDates[availableDates.length - 1].split('.');
-                    dateInput.min = `${firstDate[2]}-${firstDate[1]}-${firstDate[0]}`;
-                    dateInput.max = `${lastDate[2]}-${lastDate[1]}-${lastDate[0]}`;
+                    
+                    dateInput.min = `${firstDate[2]}-${firstDate[1].padStart(2, '0')}-${firstDate[0].padStart(2, '0')}`;
+                    dateInput.max = `${lastDate[2]}-${lastDate[1].padStart(2, '0')}-${lastDate[0].padStart(2, '0')}`;
                 }
             }
 
@@ -572,15 +579,18 @@
                 const dateInput = document.getElementById('date-picker');
                 if (dateInput) {
                     dateInput.addEventListener('change', () => {
-                        const selectedDate = dateInput.value.split('-').reverse().join('.');
+                        // Преобразуем YYYY-MM-DD в DD.MM.YYYY
+                        const [year, month, day] = dateInput.value.split('-');
+                        const selectedDate = `${day.padStart(2, '0')}.${month.padStart(2, '0')}.${year}`;
+                        
                         if (availableDates.includes(selectedDate)) {
                             currentDate = selectedDate;
                             updateNavigationButtons();
                             updateChart();
                         } else {
                             alert("Данные за выбранную дату недоступны.");
-                            const [day, month, year] = currentDate.split('.');
-                            dateInput.value = `${year}-${month}-${day}`;
+                            // Восстанавливаем текущую дату в пикере
+                            updateDatePicker(currentDate);
                         }
                     });
                 }
