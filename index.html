@@ -7,7 +7,6 @@
     <script src="https://cdn.plot.ly/plotly-2.18.2.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <style>
-        /* Ваши стили остаются без изменений */
         body {
             font-family: Arial, sans-serif;
             max-width: 1200px;
@@ -15,12 +14,170 @@
             padding: 20px;
             background-color: #f9f9f9;
         }
-        /* ... остальные стили ... */
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .direction-selector {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .direction-options {
+            display: flex;
+            gap: 15px;
+        }
+        .date-nav {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .nav-button {
+            padding: 8px 15px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        .nav-button:hover:not(:disabled) {
+            background-color: #45a049;
+        }
+        .nav-button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #date-picker {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        .metrics {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin: 30px 0;
+            flex-wrap: wrap;
+        }
+        .metric-card {
+            background-color: #fff;
+            border-radius: 10px;
+            padding: 20px;
+            min-width: 250px;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .metric-title {
+            font-size: 16px;
+            color: #555;
+            margin-bottom: 10px;
+        }
+        .metric-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #1f77b4;
+        }
+        .metric-wait {
+            color: #ff7f0e;
+        }
+        #chart {
+            height: 550px;
+            width: 100%;
+            background-color: #fff;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .error-message {
+            color: red;
+            text-align: center;
+            padding: 20px;
+            background-color: #ffeeee;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .modebar {
+            display: none !important;
+        }
+        .hovertext {
+            font-family: Arial, sans-serif !important;
+            font-size: 14px !important;
+            padding: 8px !important;
+            background: rgba(255, 255, 255, 0.95) !important;
+            border: 1px solid #ddd !important;
+            border-radius: 5px !important;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1) !important;
+        }
+        .plotly .legend {
+            top: 100% !important;
+            bottom: auto !important;
+            transform: none !important;
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
-    <!-- Ваша HTML-разметка остается без изменений -->
-    <!-- ... -->
+    <div class="header">
+        <h1>Статистика движения по Крымскому мосту</h1>
+        <p>Актуальные данные о количестве машин и времени ожидания</p>
+    </div>
+
+    <div class="controls">
+        <div class="direction-selector">
+            <label><strong>Направление движения:</strong></label>
+            <div class="direction-options">
+                <label>
+                    <input type="radio" id="to_crimea" name="direction" value="to_crimea" checked />
+                    В Крым
+                </label>
+                <label>
+                    <input type="radio" id="from_crimea" name="direction" value="from_crimea" />
+                    Из Крыма
+                </label>
+            </div>
+        </div>
+
+        <div class="date-nav">
+            <button class="nav-button" id="prev-date" title="Предыдущий день">←</button>
+            <input type="date" id="date-picker" />
+            <button class="nav-button" id="next-date" title="Следующий день">→</button>
+        </div>
+    </div>
+
+    <div id="chart"></div>
+
+    <div class="metrics">
+        <div class="metric-card">
+            <div class="metric-title">Всего машин за сутки</div>
+            <div class="metric-value" id="total-cars">0</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-title">Максимальное время ожидания</div>
+            <div class="metric-value metric-wait" id="max-wait">0 часов</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-title">Статус моста</div>
+            <div class="metric-value" id="bridge-status">Открыт</div>
+        </div>
+    </div>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
@@ -37,7 +194,6 @@
                 opened: "#51CF66"
             };
 
-            // Новая функция для корректного парсинга даты и времени
             function parseDateTime(dateStr, timeStr) {
                 const [day, month, year] = dateStr.split('.');
                 const [hours, minutes] = timeStr.split(':');
@@ -105,7 +261,6 @@
             function initAvailableDates(data) {
                 const dateSet = new Set();
                 data.forEach(item => {
-                    // Форматируем дату как yyyy-mm-dd для корректной сортировки
                     const dateStr = item.date.getFullYear() + '-' + 
                                    String(item.date.getMonth() + 1).padStart(2, '0') + '-' + 
                                    String(item.date.getDate()).padStart(2, '0');
@@ -125,8 +280,44 @@
                 }
             }
 
-            // Остальные функции (updateNavigationButtons, formatDateDisplay, updateMetrics) остаются без изменений
-            // ...
+            function updateNavigationButtons() {
+                const prevBtn = document.getElementById('prev-date');
+                const nextBtn = document.getElementById('next-date');
+                if (!prevBtn || !nextBtn) return;
+                
+                const currentIndex = availableDates.indexOf(currentDate);
+                prevBtn.disabled = currentIndex <= 0;
+                nextBtn.disabled = currentIndex >= availableDates.length - 1;
+            }
+
+            function formatDateDisplay(dateStr) {
+                const d = new Date(dateStr);
+                const day = d.getDate().toString().padStart(2, '0');
+                const month = (d.getMonth() + 1).toString().padStart(2, '0');
+                const year = d.getFullYear();
+                return `${day}.${month}.${year}`;
+            }
+
+            function updateMetrics(data, direction) {
+                const trafficData = data.filter(item => !item.isBridgeEvent);
+                
+                const totalCars = trafficData.reduce((sum, item) => {
+                    const cars = direction === 'to_crimea' ? item.to_crimea : item.from_crimea;
+                    return sum + (typeof cars === 'number' ? cars : 0);
+                }, 0);
+
+                const maxWaitRaw = Math.max(...trafficData.map(item => {
+                    const wait = direction === 'to_crimea' ? item.to_crimea_wait : item.from_crimea_wait;
+                    return typeof wait === 'number' ? wait : 0;
+                }));
+                const maxWait = maxWaitRaw ? maxWaitRaw.toFixed(2) : "0";
+
+                const totalCarsEl = document.getElementById("total-cars");
+                const maxWaitEl = document.getElementById("max-wait");
+                
+                if (totalCarsEl) totalCarsEl.textContent = totalCars.toLocaleString('ru-RU');
+                if (maxWaitEl) maxWaitEl.textContent = `${maxWait} часов`;
+            }
 
             function updateChart() {
                 const chartEl = document.getElementById('chart');
@@ -137,22 +328,31 @@
                 
                 const directionValue = direction.value;
                 const isCurrentDate = currentDate === availableDates[availableDates.length - 1];
+                const now = new Date();
+                const currentHour = now.getHours();
+                const currentMinute = now.getMinutes();
+
+                let hoursToShow = 24;
+                let startHour = 0;
                 
-                // Получаем данные для текущей даты
+                if (isCurrentDate) {
+                    startHour = (currentHour - 23) < 0 ? 0 : currentHour - 23;
+                    hoursToShow = currentHour - startHour + 1;
+                }
+
                 const currentDateObj = new Date(currentDate + 'T00:00:00');
                 const dataForCurrentDate = allData.filter(item => {
                     const itemDate = new Date(item.date);
                     return itemDate.getFullYear() === currentDateObj.getFullYear() &&
                            itemDate.getMonth() === currentDateObj.getMonth() &&
-                           itemDate.getDate() === currentDateObj.getDate();
+                           itemDate.getDate() === currentDateObj.getDate() &&
+                           item.hours >= startHour;
                 });
 
-                // Сортируем события по времени
                 const bridgeEvents = dataForCurrentDate
                     .filter(item => item.isBridgeEvent)
                     .sort((a, b) => a.timeDecimal - b.timeDecimal);
 
-                // Определяем текущий статус моста
                 const lastEvent = bridgeEvents[bridgeEvents.length - 1];
                 const bridgeStatus = lastEvent ? lastEvent.to_crimea : "Opened";
                 const bridgeStatusEl = document.getElementById("bridge-status");
@@ -161,12 +361,245 @@
                     bridgeStatusEl.style.color = bridgeStatus === "Closed" ? COLORS.closed : COLORS.opened;
                 }
 
-                // Строим график (остальная часть функции остается без изменений)
-                // ...
+                const hours = Array.from({length: hoursToShow}, (_, i) => startHour + i);
+                const xLabels = hours.map(h => `${h.toString().padStart(2, '0')}:00`);
+                const carsArr = [];
+                const waitArr = [];
+
+                hours.forEach(hour => {
+                    const entries = dataForCurrentDate.filter(d => d.hours === hour && !d.isBridgeEvent);
+                    const lastEntry = entries[entries.length - 1];
+                    
+                    const cars = lastEntry ? 
+                        (directionValue === 'to_crimea' ? lastEntry.to_crimea : lastEntry.from_crimea) : 0;
+                    const wait = lastEntry ? 
+                        (directionValue === 'to_crimea' ? lastEntry.to_crimea_wait : lastEntry.from_crimea_wait) : 0;
+                    
+                    carsArr.push(typeof cars === 'number' ? cars : 0);
+                    waitArr.push(wait);
+                });
+
+                const shapes = [];
+                const hoverEvents = [];
+                
+                if (bridgeEvents.length > 0 && bridgeEvents[0].to_crimea === "Opened") {
+                    shapes.push({
+                        type: 'rect',
+                        xref: 'x',
+                        yref: 'paper',
+                        x0: startHour,
+                        x1: bridgeEvents[0].timeDecimal,
+                        y0: 0,
+                        y1: 1,
+                        fillcolor: 'rgba(255, 0, 0, 0.1)',
+                        line: {width: 0},
+                        layer: 'below'
+                    });
+                }
+
+                bridgeEvents.forEach((event, index) => {
+                    const isClosed = event.to_crimea === "Closed";
+                    const color = isClosed ? COLORS.closed : COLORS.opened;
+                    
+                    shapes.push({
+                        type: 'line',
+                        xref: 'x',
+                        yref: 'paper',
+                        x0: event.timeDecimal,
+                        x1: event.timeDecimal,
+                        y0: 0,
+                        y1: 1,
+                        line: {color: color, width: 2},
+                        opacity: 0.7,
+                        layer: 'below'
+                    });
+
+                    hoverEvents.push({
+                        x: event.timeDecimal,
+                        y: 1,
+                        text: `${isClosed ? 'Закрыт' : 'Открыт'} в ${event.timeStr}`,
+                        color: color
+                    });
+
+                    if (isClosed && index < bridgeEvents.length - 1) {
+                        shapes.push({
+                            type: 'rect',
+                            xref: 'x',
+                            yref: 'paper',
+                            x0: event.timeDecimal,
+                            x1: bridgeEvents[index + 1].timeDecimal,
+                            y0: 0,
+                            y1: 1,
+                            fillcolor: 'rgba(255, 0, 0, 0.1)',
+                            line: {width: 0},
+                            layer: 'below'
+                        });
+                    }
+                });
+
+                if (bridgeEvents.length > 0 && bridgeEvents[bridgeEvents.length - 1].to_crimea === "Closed") {
+                    shapes.push({
+                        type: 'rect',
+                        xref: 'x',
+                        yref: 'paper',
+                        x0: bridgeEvents[bridgeEvents.length - 1].timeDecimal,
+                        x1: startHour + hoursToShow,
+                        y0: 0,
+                        y1: 1,
+                        fillcolor: 'rgba(255, 0, 0, 0.1)',
+                        line: {width: 0},
+                        layer: 'below'
+                    });
+                }
+
+                const plotData = [
+                    {
+                        x: xLabels,
+                        y: carsArr,
+                        name: "Машины",
+                        type: "scatter",
+                        mode: "lines+markers",
+                        marker: {color: COLORS.cars},
+                        line: {color: COLORS.cars},
+                        yaxis: "y1",
+                        hovertemplate: '%{y} машин<br>%{x}<extra></extra>'
+                    },
+                    {
+                        x: xLabels,
+                        y: waitArr,
+                        name: "Время ожидания (ч)",
+                        type: "scatter",
+                        mode: "lines+markers",
+                        marker: {color: COLORS.wait},
+                        line: {color: COLORS.wait, dash: 'dot'},
+                        yaxis: "y2",
+                        hovertemplate: '%{y:.2f} ч.<br>%{x}<extra></extra>'
+                    }
+                ];
+
+                const layout = {
+                    title: `Движение ${directionValue === 'to_crimea' ? 'в Крым' : 'из Крыма'} за ${formatDateDisplay(currentDate)}`,
+                    xaxis: {
+                        title: "Время (часы)",
+                        tickangle: -45,
+                        tickmode: "array",
+                        tickvals: xLabels,
+                        tickfont: {size: 12},
+                        showgrid: false,
+                        zeroline: false
+                    },
+                    yaxis: {
+                        title: "Количество машин",
+                        side: "left",
+                        showgrid: true,
+                        zeroline: true,
+                        zerolinewidth: 1,
+                        zerolinecolor: "#ddd",
+                        rangemode: "tozero"
+                    },
+                    yaxis2: {
+                        title: "Время ожидания (часы)",
+                        side: "right",
+                        overlaying: "y",
+                        showgrid: false,
+                        zeroline: false,
+                        rangemode: "tozero"
+                    },
+                    margin: {t: 60, b: 150, l: 70, r: 70},
+                    hovermode: "x unified",
+                    shapes: shapes,
+                    legend: {
+                        orientation: "h",
+                        y: -0.3,
+                        x: 0
+                    }
+                };
+
+                Plotly.newPlot(chartEl, plotData, layout, {responsive: true, displayModeBar: false});
+
+                chartEl.on('plotly_hover', function(data) {
+                    const xVal = data.points[0].x;
+                    const hoverEvent = hoverEvents.find(e => Math.abs(e.x - xVal) < 0.5);
+                    
+                    if (hoverEvent) {
+                        Plotly.relayout(chartEl, {
+                            annotations: [{
+                                x: hoverEvent.x,
+                                y: 1.05,
+                                xref: 'x',
+                                yref: 'paper',
+                                text: hoverEvent.text,
+                                showarrow: false,
+                                xanchor: 'center',
+                                font: {size: 12, color: hoverEvent.color},
+                                bgcolor: 'rgba(255,255,255,0.9)',
+                                borderpad: 4
+                            }]
+                        });
+                    }
+                });
+
+                chartEl.on('plotly_unhover', function() {
+                    Plotly.relayout(chartEl, {annotations: []});
+                });
+
+                updateMetrics(dataForCurrentDate, directionValue);
             }
 
-            // Остальной код инициализации остается без изменений
-            // ...
+            function initControls() {
+                const directionRadios = document.querySelectorAll('input[name="direction"]');
+                directionRadios.forEach(radio => {
+                    radio.addEventListener('change', updateChart);
+                });
+
+                const dateInput = document.getElementById('date-picker');
+                if (dateInput) {
+                    dateInput.addEventListener('change', () => {
+                        const selectedDate = dateInput.value;
+                        if (availableDates.includes(selectedDate)) {
+                            currentDate = selectedDate;
+                            updateNavigationButtons();
+                            updateChart();
+                        } else {
+                            alert("Данные за выбранную дату недоступны.");
+                            dateInput.value = currentDate;
+                        }
+                    });
+                }
+
+                const prevBtn = document.getElementById('prev-date');
+                if (prevBtn) {
+                    prevBtn.addEventListener('click', () => {
+                        const idx = availableDates.indexOf(currentDate);
+                        if (idx > 0) {
+                            currentDate = availableDates[idx - 1];
+                            updateDatePicker(currentDate);
+                            updateNavigationButtons();
+                            updateChart();
+                        }
+                    });
+                }
+
+                const nextBtn = document.getElementById('next-date');
+                if (nextBtn) {
+                    nextBtn.addEventListener('click', () => {
+                        const idx = availableDates.indexOf(currentDate);
+                        if (idx < availableDates.length - 1) {
+                            currentDate = availableDates[idx + 1];
+                            updateDatePicker(currentDate);
+                            updateNavigationButtons();
+                            updateChart();
+                        }
+                    });
+                }
+            }
+
+            function showError(message) {
+                const errorEl = document.createElement('div');
+                errorEl.className = 'error-message';
+                errorEl.textContent = message;
+                document.body.appendChild(errorEl);
+            }
 
             async function initApp() {
                 try {
@@ -186,13 +619,6 @@
                     showError(`Ошибка загрузки данных: ${error.message}`);
                     console.error(error);
                 }
-            }
-
-            function showError(message) {
-                const errorEl = document.createElement('div');
-                errorEl.className = 'error-message';
-                errorEl.textContent = message;
-                document.body.appendChild(errorEl);
             }
 
             initApp();
