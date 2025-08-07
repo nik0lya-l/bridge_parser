@@ -7,16 +7,184 @@
     <script src="https://cdn.plot.ly/plotly-2.18.2.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <style>
-        /* Стили остаются такими же */
-        /* ... */
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .direction-selector {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .direction-options {
+            display: flex;
+            gap: 15px;
+        }
+        .date-nav {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .nav-button {
+            padding: 8px 15px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        .nav-button:hover:not(:disabled) {
+            background-color: #45a049;
+        }
+        .nav-button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #date-picker {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        .metrics {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin: 30px 0;
+            flex-wrap: wrap;
+        }
+        .metric-card {
+            background-color: #fff;
+            border-radius: 10px;
+            padding: 20px;
+            min-width: 250px;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .metric-title {
+            font-size: 16px;
+            color: #555;
+            margin-bottom: 10px;
+        }
+        .metric-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #1f77b4;
+        }
+        .metric-wait {
+            color: #ff7f0e;
+        }
+        #chart {
+            height: 550px;
+            width: 100%;
+            background-color: #fff;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .error-message {
+            color: red;
+            text-align: center;
+            padding: 20px;
+            background-color: #ffeeee;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .modebar {
+            display: none !important;
+        }
+        .hovertext {
+            font-family: Arial, sans-serif !important;
+            font-size: 14px !important;
+            padding: 8px !important;
+            background: rgba(255, 255, 255, 0.95) !important;
+            border: 1px solid #ddd !important;
+            border-radius: 5px !important;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1) !important;
+        }
+        .legend-closed {
+            background-color: rgba(255, 0, 0, 0.1);
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
+        .legend-opened {
+            background-color: rgba(0, 255, 0, 0.1);
+            padding: 2px 5px;
+            border-radius: 3px;
+        }
     </style>
 </head>
 <body>
-    <!-- HTML-разметка остаётся такой же -->
-    <!-- ... -->
+    <div class="header">
+        <h1>Статистика движения по Крымскому мосту</h1>
+        <p>Актуальные данные о количестве машин и времени ожидания</p>
+    </div>
+
+    <div class="controls">
+        <div class="direction-selector">
+            <label><strong>Направление движения:</strong></label>
+            <div class="direction-options">
+                <label>
+                    <input type="radio" id="to_crimea" name="direction" value="to_crimea" checked />
+                    В Крым
+                </label>
+                <label>
+                    <input type="radio" id="from_crimea" name="direction" value="from_crimea" />
+                    Из Крыма
+                </label>
+            </div>
+        </div>
+
+        <div class="date-nav">
+            <button class="nav-button" id="prev-date" title="Предыдущий день">←</button>
+            <input type="date" id="date-picker" />
+            <button class="nav-button" id="next-date" title="Следующий день">→</button>
+        </div>
+    </div>
+
+    <div id="chart"></div>
+
+    <div class="metrics">
+        <div class="metric-card">
+            <div class="metric-title">Всего машин за сутки</div>
+            <div class="metric-value" id="total-cars">0</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-title">Максимальное время ожидания</div>
+            <div class="metric-value metric-wait" id="max-wait">0 часов</div>
+        </div>
+        <div class="metric-card">
+            <div class="metric-title">Статус моста</div>
+            <div class="metric-value" id="bridge-status">Открыт</div>
+        </div>
+    </div>
 
     <script>
-        const DATA_URL = "crimea_bridge.csv"; // Измените на ваш URL
+        const DATA_URL = "crimea_bridge.csv";
 
         let allData = [];
         let availableDates = [];
@@ -72,6 +240,52 @@
             }
         }
 
+        function initAvailableDates(data) {
+            const dateSet = new Set(data.map(d => d.date.toISOString().split('T')[0]));
+            availableDates = Array.from(dateSet).sort();
+        }
+
+        function updateDatePicker(dateStr) {
+            const dateInput = document.getElementById('date-picker');
+            dateInput.value = dateStr;
+            dateInput.min = availableDates[0];
+            dateInput.max = availableDates[availableDates.length - 1];
+        }
+
+        function updateNavigationButtons() {
+            const prevBtn = document.getElementById('prev-date');
+            const nextBtn = document.getElementById('next-date');
+            const currentIndex = availableDates.indexOf(currentDate);
+            prevBtn.disabled = currentIndex <= 0;
+            nextBtn.disabled = currentIndex >= availableDates.length - 1;
+        }
+
+        function formatDateDisplay(dateStr) {
+            const d = new Date(dateStr);
+            const day = d.getDate().toString().padStart(2, '0');
+            const month = (d.getMonth() + 1).toString().padStart(2, '0');
+            const year = d.getFullYear();
+            return `${day}.${month}.${year}`;
+        }
+
+        function updateMetrics(data, direction) {
+            const trafficData = data.filter(item => !item.isBridgeEvent);
+            
+            const totalCars = trafficData.reduce((sum, item) => {
+                const cars = direction === 'to_crimea' ? item.to_crimea : item.from_crimea;
+                return sum + (typeof cars === 'number' ? cars : 0);
+            }, 0);
+
+            const maxWaitRaw = Math.max(...trafficData.map(item => {
+                const wait = direction === 'to_crimea' ? item.to_crimea_wait : item.from_crimea_wait;
+                return typeof wait === 'number' ? wait : 0;
+            }));
+            const maxWait = maxWaitRaw ? maxWaitRaw.toFixed(2) : "0";
+
+            document.getElementById("total-cars").textContent = totalCars.toLocaleString('ru-RU');
+            document.getElementById("max-wait").textContent = `${maxWait} часов`;
+        }
+
         function updateChart() {
             if (!allData || allData.length === 0) return;
 
@@ -81,7 +295,6 @@
             const currentHour = now.getHours();
             const currentMinute = now.getMinutes();
 
-            // Получаем данные за последние 24 часа для текущего дня
             let hoursToShow = 24;
             let startHour = 0;
             
@@ -95,12 +308,10 @@
                 item.hours >= startHour
             );
 
-            // Получаем все события закрытия/открытия моста
             const bridgeEvents = dataForCurrentDate
                 .filter(item => item.isBridgeEvent)
                 .sort((a, b) => a.timeDecimal - b.timeDecimal);
 
-            // Определяем текущий статус моста
             const lastEvent = bridgeEvents[bridgeEvents.length - 1];
             const bridgeStatus = lastEvent ? lastEvent.to_crimea : "Opened";
             document.getElementById("bridge-status").textContent = 
@@ -108,13 +319,11 @@
             document.getElementById("bridge-status").style.color = 
                 bridgeStatus === "Closed" ? COLORS.closed : COLORS.opened;
 
-            // Создаем массивы для графика
             const hours = Array.from({length: hoursToShow}, (_, i) => startHour + i);
             const xLabels = hours.map(h => `${h.toString().padStart(2, '0')}:00`);
             const carsArr = [];
             const waitArr = [];
 
-            // Заполняем данные
             hours.forEach(hour => {
                 const entries = dataForCurrentDate.filter(d => d.hours === hour && !d.isBridgeEvent);
                 const lastEntry = entries[entries.length - 1];
@@ -128,11 +337,9 @@
                 waitArr.push(wait);
             });
 
-            // Создаем элементы для отображения статуса моста
             const shapes = [];
             const annotations = [];
             
-            // Если есть только открытие, красим всё до него как закрытое
             if (bridgeEvents.length > 0 && bridgeEvents[0].to_crimea === "Opened") {
                 shapes.push({
                     type: 'rect',
@@ -148,12 +355,10 @@
                 });
             }
 
-            // Добавляем линии и области для всех событий
             bridgeEvents.forEach((event, index) => {
                 const isClosed = event.to_crimea === "Closed";
                 const color = isClosed ? COLORS.closed : COLORS.opened;
                 
-                // Вертикальная линия
                 shapes.push({
                     type: 'line',
                     xref: 'x',
@@ -167,7 +372,6 @@
                     layer: 'below'
                 });
 
-                // Подпись с точным временем
                 annotations.push({
                     x: event.timeDecimal,
                     y: 1.05,
@@ -179,7 +383,6 @@
                     font: {size: 12, color: color}
                 });
 
-                // Закрашиваем период между закрытием и открытием
                 if (isClosed && index < bridgeEvents.length - 1) {
                     shapes.push({
                         type: 'rect',
@@ -196,7 +399,6 @@
                 }
             });
 
-            // Если последнее событие - закрытие, красим до конца графика
             if (bridgeEvents.length > 0 && bridgeEvents[bridgeEvents.length - 1].to_crimea === "Closed") {
                 shapes.push({
                     type: 'rect',
@@ -212,7 +414,6 @@
                 });
             }
 
-            // Строим график
             const plotData = [
                 {
                     x: xLabels,
@@ -276,12 +477,53 @@
             updateMetrics(dataForCurrentDate, direction);
         }
 
-        // Остальные функции остаются без изменений
-        // ... 
+        function initControls() {
+            const directionRadios = document.querySelectorAll('input[name="direction"]');
+            directionRadios.forEach(radio => {
+                radio.addEventListener('change', updateChart);
+            });
+
+            document.getElementById('date-picker').addEventListener('change', () => {
+                const selectedDate = document.getElementById('date-picker').value;
+                if (availableDates.includes(selectedDate)) {
+                    currentDate = selectedDate;
+                    updateNavigationButtons();
+                    updateChart();
+                } else {
+                    alert("Данные за выбранную дату недоступны.");
+                    document.getElementById('date-picker').value = currentDate;
+                }
+            });
+
+            document.getElementById('prev-date').addEventListener('click', () => {
+                const idx = availableDates.indexOf(currentDate);
+                if (idx > 0) {
+                    currentDate = availableDates[idx - 1];
+                    updateDatePicker(currentDate);
+                    updateNavigationButtons();
+                    updateChart();
+                }
+            });
+
+            document.getElementById('next-date').addEventListener('click', () => {
+                const idx = availableDates.indexOf(currentDate);
+                if (idx < availableDates.length - 1) {
+                    currentDate = availableDates[idx + 1];
+                    updateDatePicker(currentDate);
+                    updateNavigationButtons();
+                    updateChart();
+                }
+            });
+        }
 
         async function init() {
             try {
                 allData = await loadData();
+                if (allData.length === 0) {
+                    document.body.innerHTML = `<div class="error-message">Данные не загружены или отсутствуют.</div>`;
+                    return;
+                }
+                
                 initAvailableDates(allData);
                 currentDate = availableDates[availableDates.length - 1];
                 updateDatePicker(currentDate);
