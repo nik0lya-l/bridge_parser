@@ -289,7 +289,6 @@
             function initAvailableDates(data) {
                 const dateSet = new Set(data.map(item => item.dateStr));
                 availableDates = Array.from(dateSet).sort((a, b) => {
-                    // Исправленная сортировка дат в формате DD.MM.YYYY
                     const [aDay, aMonth, aYear] = a.split('.').map(Number);
                     const [bDay, bMonth, bYear] = b.split('.').map(Number);
                     return new Date(aYear, aMonth-1, aDay) - new Date(bYear, bMonth-1, bDay);
@@ -300,14 +299,12 @@
                 const dateInput = document.getElementById('date-picker');
                 if (!dateInput) return;
                 
-                // Преобразуем DD.MM.YYYY в YYYY-MM-DD
                 const [day, month, year] = dateStr.split('.');
                 const isoDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
                 
                 dateInput.value = isoDate;
                 
                 if (availableDates.length > 0) {
-                    // Корректное определение минимальной и максимальной дат
                     const firstDate = availableDates[0].split('.');
                     const lastDate = availableDates[availableDates.length - 1].split('.');
                     
@@ -324,10 +321,6 @@
                 const currentIndex = availableDates.indexOf(currentDate);
                 prevBtn.disabled = currentIndex <= 0;
                 nextBtn.disabled = currentIndex >= availableDates.length - 1;
-            }
-
-            function formatDateDisplay(dateStr) {
-                return dateStr;
             }
 
             function updateMetrics(data, direction) {
@@ -374,30 +367,41 @@
                 // Сортируем данные по времени
                 dataForCurrentDate.sort((a, b) => a.timeDecimal - b.timeDecimal);
 
-                // Получаем все уникальные часы
-                const hours = [...new Set(dataForCurrentDate.map(item => item.hours))].sort((a, b) => a - b);
+                // Создаем массив для всех часов (0-23)
+                const hoursArray = Array.from({length: 24}, (_, i) => i);
                 
                 // Создаем массивы для графика
                 const xLabels = [];
                 const carsArr = [];
                 const waitArr = [];
                 
-                // Для каждого часа берем последнее значение
-                hours.forEach(hour => {
-                    const entries = dataForCurrentDate.filter(item => item.hours === hour);
-                    const lastEntry = entries[entries.length - 1];
+                // Для каждого часа заполняем данные
+                hoursArray.forEach(hour => {
+                    // Находим все записи для этого часа
+                    const hourEntries = dataForCurrentDate.filter(item => item.hours === hour);
                     
-                    const cars = lastEntry ? 
-                        (directionValue === 'to_crimea' ? lastEntry.to_crimea : lastEntry.from_crimea) : 0;
-                    const wait = lastEntry ? 
-                        (directionValue === 'to_crimea' ? lastEntry.to_crimea_wait : lastEntry.from_crimea_wait) : 0;
+                    if (hourEntries.length > 0) {
+                        // Берем последнюю запись в часу
+                        hourEntries.sort((a, b) => b.minutes - a.minutes);
+                        const lastEntry = hourEntries[0];
+                        
+                        const cars = lastEntry ? 
+                            (directionValue === 'to_crimea' ? lastEntry.to_crimea : lastEntry.from_crimea) : 0;
+                        const wait = lastEntry ? 
+                            (directionValue === 'to_crimea' ? lastEntry.to_crimea_wait : lastEntry.from_crimea_wait) : 0;
+                        
+                        carsArr.push(typeof cars === 'number' ? cars : 0);
+                        waitArr.push(wait);
+                    } else {
+                        // Если данных нет - ставим 0
+                        carsArr.push(0);
+                        waitArr.push(0);
+                    }
                     
                     xLabels.push(`${String(hour).padStart(2, '0')}:00`);
-                    carsArr.push(typeof cars === 'number' ? cars : 0);
-                    waitArr.push(wait);
                 });
 
-                // Обрабатываем события моста
+                // Обрабатываем события моста (без 3-часового сдвига)
                 const bridgeEvents = dataForCurrentDate.filter(item => item.isBridgeEvent);
                 const shapes = [];
                 const hoverEvents = [];
@@ -408,6 +412,7 @@
                 bridgeEvents.forEach(event => {
                     const color = event.to_crimea === "Closed" ? COLORS.closed : COLORS.opened;
                     
+                    // Используем реальное время без сдвига
                     shapes.push({
                         type: 'line',
                         xref: 'x',
@@ -579,7 +584,6 @@
                 const dateInput = document.getElementById('date-picker');
                 if (dateInput) {
                     dateInput.addEventListener('change', () => {
-                        // Преобразуем YYYY-MM-DD в DD.MM.YYYY
                         const [year, month, day] = dateInput.value.split('-');
                         const selectedDate = `${day.padStart(2, '0')}.${month.padStart(2, '0')}.${year}`;
                         
@@ -589,7 +593,6 @@
                             updateChart();
                         } else {
                             alert("Данные за выбранную дату недоступны.");
-                            // Восстанавливаем текущую дату в пикере
                             updateDatePicker(currentDate);
                         }
                     });
