@@ -7,17 +7,194 @@
     <script src="https://cdn.plot.ly/plotly-2.18.2.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <style>
-        /* Ваши стили остаются без изменений */
-        /* ... */
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .direction-selector {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .direction-options {
+            display: flex;
+            gap: 15px;
+        }
+        .date-nav {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .nav-button {
+            padding: 8px 15px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        .nav-button:hover:not(:disabled) {
+            background-color: #45a049;
+        }
+        .nav-button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #date-picker {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        .metrics {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin: 30px 0;
+            flex-wrap: wrap;
+        }
+        .metric-card {
+            background-color: #fff;
+            border-radius: 10px;
+            padding: 20px;
+            min-width: 250px;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .metric-title {
+            font-size: 16px;
+            color: #555;
+            margin-bottom: 10px;
+        }
+        .metric-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #1f77b4;
+        }
+        .metric-wait {
+            color: #ff7f0e;
+        }
+        #chart {
+            height: 550px;
+            width: 100%;
+            background-color: #fff;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .error-message {
+            color: red;
+            text-align: center;
+            padding: 20px;
+            background-color: #ffeeee;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .loading-message {
+            color: #555;
+            text-align: center;
+            padding: 20px;
+            font-style: italic;
+        }
+        .modebar {
+            display: none !important;
+        }
+        .hovertext {
+            font-family: Arial, sans-serif !important;
+            font-size: 14px !important;
+            padding: 8px !important;
+            background: rgba(255, 255, 255, 0.95) !important;
+            border: 1px solid #ddd !important;
+            border-radius: 5px !important;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1) !important;
+        }
+        .plotly .legend {
+            top: 100% !important;
+            bottom: auto !important;
+            transform: none !important;
+            margin-top: 20px;
+        }
     </style>
 </head>
 <body>
-    <!-- Ваша HTML-разметка остается без изменений -->
-    <!-- ... -->
+    <div id="loading" class="loading-message">Загрузка данных...</div>
+    
+    <div id="content" style="display: none;">
+        <div class="header">
+            <h1>Статистика движения по Крымскому мосту</h1>
+            <p>Актуальные данные о количестве машин и времени ожидания</p>
+        </div>
+
+        <div class="controls">
+            <div class="direction-selector">
+                <label><strong>Направление движения:</strong></label>
+                <div class="direction-options">
+                    <label>
+                        <input type="radio" id="to_crimea" name="direction" value="to_crimea" checked />
+                        В Крым
+                    </label>
+                    <label>
+                        <input type="radio" id="from_crimea" name="direction" value="from_crimea" />
+                        Из Крыма
+                    </label>
+                </div>
+            </div>
+
+            <div class="date-nav">
+                <button class="nav-button" id="prev-date" title="Предыдущий день">←</button>
+                <input type="date" id="date-picker" />
+                <button class="nav-button" id="next-date" title="Следующий день">→</button>
+            </div>
+        </div>
+
+        <div id="chart"></div>
+
+        <div class="metrics">
+            <div class="metric-card">
+                <div class="metric-title">Всего машин за сутки</div>
+                <div class="metric-value" id="total-cars">0</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-title">Максимальное время ожидания</div>
+                <div class="metric-value metric-wait" id="max-wait">0 часов</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-title">Статус моста</div>
+                <div class="metric-value" id="bridge-status">Открыт</div>
+            </div>
+        </div>
+    </div>
+
+    <div id="error-message" class="error-message" style="display: none;"></div>
 
     <script>
         document.addEventListener('DOMContentLoaded', function() {
-            const DATA_URL = "crimea_bridge.csv";
+            const DATA_URL = "crimea_bridge.csv"; // Убедитесь, что файл доступен по этому пути
+            console.log("Начало загрузки страницы");
 
             let allData = [];
             let availableDates = [];
@@ -30,33 +207,67 @@
                 opened: "#51CF66"
             };
 
-            // Функция для корректного парсинга даты и времени с учетом московского времени
+            function showLoading(show) {
+                document.getElementById('loading').style.display = show ? 'block' : 'none';
+                document.getElementById('content').style.display = show ? 'none' : 'block';
+            }
+
+            function showError(message) {
+                console.error(message);
+                document.getElementById('error-message').textContent = message;
+                document.getElementById('error-message').style.display = 'block';
+                document.getElementById('content').style.display = 'none';
+                document.getElementById('loading').style.display = 'none';
+            }
+
             function parseDateTime(dateStr, timeStr) {
-                const [day, month, year] = dateStr.split('.');
-                const [hours, minutes] = timeStr.split(':');
-                
-                // Создаем дату в московском времени (UTC+3)
-                const date = new Date(Date.UTC(year, month-1, day, hours-3, minutes));
-                
-                return {
-                    date: date,
-                    hours: parseInt(hours),
-                    minutes: parseInt(minutes),
-                    timeDecimal: parseFloat(hours) + (parseFloat(minutes) / 60),
-                    displayTime: timeStr
-                };
+                try {
+                    const [day, month, year] = dateStr.split('.');
+                    const [hours, minutes] = timeStr.split(':');
+                    
+                    // Создаем дату в московском времени (UTC+3)
+                    const date = new Date(Date.UTC(year, month-1, day, hours-3, minutes));
+                    console.log(`Парсинг даты: ${dateStr} ${timeStr} ->`, date);
+                    
+                    return {
+                        date: date,
+                        hours: parseInt(hours),
+                        minutes: parseInt(minutes),
+                        timeDecimal: parseFloat(hours) + (parseFloat(minutes) / 60),
+                        displayTime: timeStr
+                    };
+                } catch (e) {
+                    console.error("Ошибка парсинга даты:", dateStr, timeStr, e);
+                    throw e;
+                }
             }
 
             async function loadData() {
+                showLoading(true);
+                console.log("Начало загрузки данных");
+                
                 try {
                     const response = await fetch(DATA_URL);
-                    if (!response.ok) throw new Error(`Ошибка HTTP! Статус: ${response.status}`);
+                    console.log("Ответ сервера:", response.status);
+                    
+                    if (!response.ok) {
+                        throw new Error(`Ошибка HTTP! Статус: ${response.status}`);
+                    }
+                    
                     const text = await response.text();
+                    console.log("Данные получены, начало парсинга CSV");
+                    
                     return new Promise((resolve, reject) => {
                         Papa.parse(text, {
                             header: true,
                             skipEmptyLines: true,
                             complete: (results) => {
+                                console.log("CSV парсинг завершен, строк:", results.data.length);
+                                
+                                if (results.errors.length > 0) {
+                                    console.warn("Ошибки парсинга CSV:", results.errors);
+                                }
+                                
                                 const processedData = results.data
                                     .filter(row => row.date && row.time)
                                     .map(row => {
@@ -78,22 +289,31 @@
                                                 isBridgeEvent: row.to_crimea === "Closed" || row.to_crimea === "Opened"
                                             };
                                         } catch (e) {
-                                            console.error("Ошибка парсинга строки:", row, e);
+                                            console.error("Ошибка обработки строки:", row, e);
                                             return null;
                                         }
                                     })
                                     .filter(Boolean);
+                                
+                                console.log("Успешно обработано записей:", processedData.length);
                                 resolve(processedData);
                             },
-                            error: reject
+                            error: (error) => {
+                                console.error("Ошибка парсинга CSV:", error);
+                                reject(new Error(`Ошибка парсинга CSV: ${error.message}`));
+                            }
                         });
                     });
                 } catch (error) {
+                    console.error("Ошибка загрузки данных:", error);
                     throw error;
+                } finally {
+                    showLoading(false);
                 }
             }
 
             function initAvailableDates(data) {
+                console.log("Инициализация доступных дат");
                 const dateSet = new Set();
                 data.forEach(item => {
                     const dateStr = item.date.getFullYear() + '-' + 
@@ -102,9 +322,11 @@
                     dateSet.add(dateStr);
                 });
                 availableDates = Array.from(dateSet).sort();
+                console.log("Доступные даты:", availableDates);
             }
 
             function updateDatePicker(dateStr) {
+                console.log("Обновление date-picker:", dateStr);
                 const dateInput = document.getElementById('date-picker');
                 if (dateInput) {
                     dateInput.value = dateStr;
@@ -116,6 +338,7 @@
             }
 
             function updateNavigationButtons() {
+                console.log("Обновление кнопок навигации");
                 const prevBtn = document.getElementById('prev-date');
                 const nextBtn = document.getElementById('next-date');
                 if (!prevBtn || !nextBtn) return;
@@ -134,6 +357,7 @@
             }
 
             function updateMetrics(data, direction) {
+                console.log("Обновление метрик для направления:", direction);
                 const trafficData = data.filter(item => !item.isBridgeEvent);
                 
                 const totalCars = trafficData.reduce((sum, item) => {
@@ -155,14 +379,22 @@
             }
 
             function updateChart() {
+                console.log("Обновление графика");
                 const chartEl = document.getElementById('chart');
-                if (!chartEl || !allData || allData.length === 0) return;
+                if (!chartEl || !allData || allData.length === 0) {
+                    console.error("Не удалось обновить график: элемент или данные отсутствуют");
+                    return;
+                }
 
                 const direction = document.querySelector('input[name="direction"]:checked');
-                if (!direction) return;
+                if (!direction) {
+                    console.error("Не выбрано направление движения");
+                    return;
+                }
                 
                 const directionValue = direction.value;
                 const isCurrentDate = currentDate === availableDates[availableDates.length - 1];
+                console.log("Текущая дата:", currentDate, "isCurrentDate:", isCurrentDate);
                 
                 // Для текущей даты показываем последние 24 часа
                 let startHour = 0;
@@ -173,6 +405,7 @@
                     const currentHour = now.getHours();
                     startHour = (currentHour - 23) >= 0 ? (currentHour - 23) : 0;
                     hoursToShow = currentHour - startHour + 1;
+                    console.log("Текущий час:", currentHour, "Начальный час:", startHour, "Часов для отображения:", hoursToShow);
                 }
 
                 const currentDateObj = new Date(currentDate + 'T00:00:00');
@@ -184,9 +417,13 @@
                            item.hours >= startHour;
                 });
 
+                console.log("Данные для текущей даты:", dataForCurrentDate.length, "записей");
+
                 const bridgeEvents = dataForCurrentDate
                     .filter(item => item.isBridgeEvent)
                     .sort((a, b) => a.timeDecimal - b.timeDecimal);
+
+                console.log("События моста:", bridgeEvents.length, bridgeEvents);
 
                 const lastEvent = bridgeEvents[bridgeEvents.length - 1];
                 const bridgeStatus = lastEvent ? lastEvent.to_crimea : "Opened";
@@ -213,6 +450,8 @@
                     carsArr.push(typeof cars === 'number' ? cars : 0);
                     waitArr.push(wait);
                 });
+
+                console.log("Данные для графика:", {carsArr, waitArr});
 
                 const shapes = [];
                 const hoverEvents = [];
@@ -241,7 +480,6 @@
                         color: color
                     });
 
-                    // Если мост закрыт, закрашиваем период до следующего события
                     if (isClosed) {
                         const endX = index < bridgeEvents.length - 1 ? 
                             bridgeEvents[index + 1].timeDecimal : 
@@ -325,7 +563,10 @@
                     }
                 };
 
-                Plotly.newPlot(chartEl, plotData, layout, {responsive: true, displayModeBar: false});
+                console.log("Создание графика Plotly");
+                Plotly.newPlot(chartEl, plotData, layout, {responsive: true, displayModeBar: false})
+                    .then(() => console.log("График успешно создан"))
+                    .catch(err => console.error("Ошибка создания графика:", err));
 
                 chartEl.on('plotly_hover', function(data) {
                     const xVal = data.points[0].x;
@@ -345,18 +586,20 @@
                                 bgcolor: 'rgba(255,255,255,0.9)',
                                 borderpad: 4
                             }]
-                        });
+                        }).catch(err => console.error("Ошибка обновления аннотации:", err));
                     }
                 });
 
                 chartEl.on('plotly_unhover', function() {
-                    Plotly.relayout(chartEl, {annotations: []});
+                    Plotly.relayout(chartEl, {annotations: []})
+                        .catch(err => console.error("Ошибка удаления аннотации:", err));
                 });
 
                 updateMetrics(dataForCurrentDate, directionValue);
             }
 
             function initControls() {
+                console.log("Инициализация элементов управления");
                 const directionRadios = document.querySelectorAll('input[name="direction"]');
                 directionRadios.forEach(radio => {
                     radio.addEventListener('change', updateChart);
@@ -371,6 +614,7 @@
                             updateNavigationButtons();
                             updateChart();
                         } else {
+                            console.warn("Выбрана недоступная дата:", selectedDate);
                             alert("Данные за выбранную дату недоступны.");
                             dateInput.value = currentDate;
                         }
@@ -404,14 +648,8 @@
                 }
             }
 
-            function showError(message) {
-                const errorEl = document.createElement('div');
-                errorEl.className = 'error-message';
-                errorEl.textContent = message;
-                document.body.appendChild(errorEl);
-            }
-
             async function initApp() {
+                console.log("Инициализация приложения");
                 try {
                     allData = await loadData();
                     if (allData.length === 0) {
@@ -425,9 +663,13 @@
                     initControls();
                     updateNavigationButtons();
                     updateChart();
+                    
+                    // Показываем контент после успешной загрузки
+                    document.getElementById('content').style.display = 'block';
+                    document.getElementById('loading').style.display = 'none';
                 } catch (error) {
                     showError(`Ошибка загрузки данных: ${error.message}`);
-                    console.error(error);
+                    console.error("Ошибка инициализации:", error);
                 }
             }
 
