@@ -1,6 +1,7 @@
 #!/usr/bin/env python3
 import re
 import csv
+from datetime import timedelta
 from telethon.sync import TelegramClient
 
 # Настройки
@@ -85,9 +86,11 @@ def parse_message(text, msg_date):
     text_lower = text.lower()
     status = check_bridge_status(text_lower)
     if status:
+        # Конвертируем UTC время в МСК (UTC+3)
+        msk_date = msg_date + timedelta(hours=3)
         return {
-            'date': msg_date.strftime("%d.%m.%Y"),
-            'time': msg_date.strftime("%H:%M"),
+            'date': msk_date.strftime("%d.%m.%Y"),
+            'time': msk_date.strftime("%H:%M"),
             'to_crimea': status,
             'to_crimea_wait': status,
             'from_crimea': status,
