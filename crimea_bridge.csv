@@ -443,10 +443,10 @@ date,time,to_crimea,to_crimea_wait,from_crimea,from_crimea_wait
 07.08.2025,10:00,2400,5,1050,3
 07.08.2025,11:00,2120,5,1450,4
 07.08.2025,12:00,2050,5,1420,4
-07.08.2025,06:37,Opened,Opened,Opened,Opened
-07.08.2025,05:22,Closed,Closed,Closed,Closed
-07.08.2025,04:45,Opened,Opened,Opened,Opened
-06.08.2025,23:08,Closed,Closed,Closed,Closed
+07.08.2025,09:37,Opened,Opened,Opened,Opened
+07.08.2025,08:22,Closed,Closed,Closed,Closed
+07.08.2025,07:45,Opened,Opened,Opened,Opened
+07.08.2025,02:08,Closed,Closed,Closed,Closed
 07.08.2025,13:00,2070,5,1632,4
 07.08.2025,14:00,1800,4,1780,4
 07.08.2025,16:00,1530,4,1280,3
@@ -470,3 +470,4 @@ date,time,to_crimea,to_crimea_wait,from_crimea,from_crimea_wait
 08.08.2025,09:00,0,0,460,2
 08.08.2025,10:00,0,0,443,2
 08.08.2025,11:00,0,0,362,1
+
