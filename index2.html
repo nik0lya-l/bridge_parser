@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+    <meta charset="UTF-8">
+    <title>График по данным Крымского моста</title>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+</head>
+<body>
+    <h2>Очереди на Крымском мосту</h2>
+    <div>
+        <button id="prevDate">←</button>
+        <span id="currentDate"></span>
+        <button id="nextDate">→</button>
+    </div>
+    <canvas id="chart" width="800" height="400"></canvas>
+
+    <script>
+    let allData = [];
+    let availableDates = [];
+    let currentDateIndex = 0;
+    let chart;
+
+    async function loadData() {
+        const response = await fetch("data.csv");
+        const text = await response.text();
+        const rows = text.trim().split("\n").slice(1);
+        
+        allData = rows.map(row => {
+            const [dateStr, timeStr, cars, wait] = row.split(",");
+            const [hours, minutes] = timeStr.split(":").map(Number);
+            return {
+                dateStr,
+                timeStr,
+                cars: Number(cars),
+                wait: Number(wait),
+                hours,
+                minutes,
+                timeDecimal: hours + minutes / 60
+            };
+        });
+
+        availableDates = [...new Set(allData.map(item => item.dateStr))].sort((a, b) => {
+            const [d1, m1, y1] = a.split(".").map(Number);
+            const [d2, m2, y2] = b.split(".").map(Number);
+            return new Date(y1, m1 - 1, d1) - new Date(y2, m2 - 1, d2);
+        });
+
+        currentDateIndex = availableDates.length - 1;
+        updateChart();
+    }
+
+    function updateChart() {
+        const currentDate = availableDates[currentDateIndex];
+        const isCurrentDate = currentDateIndex === availableDates.length - 1;
+        document.getElementById("currentDate").textContent = currentDate;
+
+        let dataForCurrentDate = allData.filter(item => item.dateStr === currentDate);
+
+        if (isCurrentDate && dataForCurrentDate.length > 0) {
+            const lastEntry = dataForCurrentDate.reduce((a, b) => 
+                (a.dateStr < b.dateStr || (a.dateStr === b.dateStr && a.timeDecimal < b.timeDecimal)) ? b : a
+            );
+
+            const [d, m, y] = lastEntry.dateStr.split('.').map(Number);
+            const lastDateTime = new Date(y, m - 1, d, lastEntry.hours, lastEntry.minutes);
+            const startDateTime = new Date(lastDateTime.getTime() - 24 * 60 * 60 * 1000);
+
+            dataForCurrentDate = allData.filter(item => {
+                const [dd, mm, yy] = item.dateStr.split('.').map(Number);
+                const itemDate = new Date(yy, mm - 1, dd, item.hours, item.minutes);
+                return itemDate >= startDateTime && itemDate <= lastDateTime;
+            });
+        }
+
+        const labels = dataForCurrentDate.map(item => item.timeStr);
+        const carsData = dataForCurrentDate.map(item => item.cars);
+        const waitData = dataForCurrentDate.map(item => item.wait);
+
+        if (chart) chart.destroy();
+
+        chart = new Chart(document.getElementById("chart").getContext("2d"), {
+            type: "line",
+            data: {
+                labels: labels,
+                datasets: [
+                    {
+                        label: "Количество машин",
+                        data: carsData,
+                        borderColor: "blue",
+                        yAxisID: "y"
+                    },
+                    {
+                        label: "Ожидание (часы)",
+                        data: waitData,
+                        borderColor: "red",
+                        yAxisID: "y1"
+                    }
+                ]
+            },
+            options: {
+                responsive: true,
+                scales: {
+                    y: {
+                        type: "linear",
+                        position: "left"
+                    },
+                    y1: {
+                        type: "linear",
+                        position: "right",
+                        grid: { drawOnChartArea: false }
+                    }
+                }
+            }
+        });
+    }
+
+    document.getElementById("prevDate").addEventListener("click", () => {
+        if (currentDateIndex > 0) {
+            currentDateIndex--;
+            updateChart();
+        }
+    });
+
+    document.getElementById("nextDate").addEventListener("click", () => {
+        if (currentDateIndex < availableDates.length - 1) {
+            currentDateIndex++;
+            updateChart();
+        }
+    });
+
+    loadData();
+    </script>
+</body>
+</html>
