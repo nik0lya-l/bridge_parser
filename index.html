@@ -371,6 +371,7 @@
                 if (isCurrentDate && dataForCurrentDate.length > 0) {
                     const lastEntry = dataForCurrentDate[dataForCurrentDate.length - 1];
                     const lastTime = lastEntry.timeDecimal;
+                    const startTime = lastTime - 24;
                     
                     const currentIndex = availableDates.indexOf(currentDate);
                     const prevDate = currentIndex > 0 ? availableDates[currentIndex - 1] : null;
@@ -378,55 +379,44 @@
                     let last24hData = [];
                     
                     if (prevDate) {
-                        const prevDayData = allData.filter(item => 
-                            item.dateStr === prevDate && 
-                            item.timeDecimal >= 0
-                        );
+                        const prevDayData = allData.filter(item => item.dateStr === prevDate);
                         last24hData = last24hData.concat(prevDayData);
                     }
                     
                     last24hData = last24hData.concat(dataForCurrentDate);
                     
                     const filteredData = last24hData.filter(item => {
-                        const absoluteTime = item.dateStr === prevDate ? 
-                            item.timeDecimal + 24 : 
-                            item.timeDecimal;
-                        
-                        return absoluteTime >= lastTime && absoluteTime <= lastTime + 24;
+                        const absoluteTime = item.dateStr === prevDate ? item.timeDecimal - 24 : item.timeDecimal;
+                        return absoluteTime >= startTime && absoluteTime <= lastTime;
                     });
                     
                     filteredData.sort((a, b) => {
-                        const aTime = a.dateStr === prevDate ? a.timeDecimal + 24 : a.timeDecimal;
-                        const bTime = b.dateStr === prevDate ? b.timeDecimal + 24 : b.timeDecimal;
+                        const aTime = a.dateStr === prevDate ? a.timeDecimal - 24 : a.timeDecimal;
+                        const bTime = b.dateStr === prevDate ? b.timeDecimal - 24 : b.timeDecimal;
                         return aTime - bTime;
                     });
                     
-                    const hourlyData = Array(24).fill(null).map(() => []);
+                    const hourlyData = Array(25).fill(null).map(() => []);
                     
                     filteredData.forEach(item => {
-                        const absoluteTime = item.dateStr === prevDate ? 
-                            item.timeDecimal + 24 : 
-                            item.timeDecimal;
-                        
-                        const hourIndex = Math.floor(absoluteTime - lastTime);
-                        
-                        if (hourIndex >= 0 && hourIndex < 24) {
+                        const absoluteTime = item.dateStr === prevDate ? item.timeDecimal - 24 : item.timeDecimal;
+                        const hourIndex = Math.floor(absoluteTime - startTime);
+                        if (hourIndex >= 0 && hourIndex < 25) {
                             hourlyData[hourIndex].push(item);
                         }
                     });
                     
-                    for (let i = 0; i < 24; i++) {
-                        let hour = Math.floor(lastTime) + i;
-                        if (hour >= 24) hour -= 24;
+                    for (let i = 0; i < 25; i++) {
+                        let hour = Math.floor(startTime) + i;
                         if (hour < 0) hour += 24;
-                        hour = hour % 24;
+                        else if (hour >= 24) hour -= 24;
                         
                         xLabels.push(`${String(Math.floor(hour)).padStart(2, '0')}:00`);
                         
                         if (hourlyData[i].length > 0) {
                             hourlyData[i].sort((a, b) => {
-                                const aTime = a.dateStr === prevDate ? a.timeDecimal + 24 : a.timeDecimal;
-                                const bTime = b.dateStr === prevDate ? b.timeDecimal + 24 : b.timeDecimal;
+                                const aTime = a.dateStr === prevDate ? a.timeDecimal - 24 : a.timeDecimal;
+                                const bTime = b.dateStr === prevDate ? b.timeDecimal - 24 : b.timeDecimal;
                                 return bTime - aTime;
                             });
                             
@@ -475,6 +465,7 @@
                     updateMetrics(dataForCurrentDate, directionValue);
                 }
 
+                // Обрабатываем события моста
                 const shapes = [];
                 const hoverEvents = [];
                 
