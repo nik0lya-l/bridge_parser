@@ -4,8 +4,8 @@
     <meta charset="UTF-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1" />
     <title>Крымский мост - статистика</title>
-    <script src="https://cdn.plot.ly/plotly-2.18.2.min.js"></script>
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <script src="https://cdn.plot.ly/plotly-2.35.2.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
     <style>
         body {
             font-family: Arial, sans-serif;
@@ -234,20 +234,27 @@
 
             async function loadData() {
                 showLoading(true);
-                
                 try {
+                    console.log('Попытка загрузки:', DATA_URL);
                     const response = await fetch(DATA_URL);
+                    console.log('Статус ответа:', response.status);
                     if (!response.ok) {
                         throw new Error(`Ошибка HTTP! Статус: ${response.status}`);
                     }
                     
                     const text = await response.text();
+                    console.log('Длина полученных данных:', text.length);
+                    if (!text.trim()) {
+                        throw new Error('CSV файл пустой');
+                    }
                     
                     return new Promise((resolve, reject) => {
                         Papa.parse(text, {
                             header: true,
                             skipEmptyLines: true,
                             complete: (results) => {
+                                console.log('Количество строк в данных:', results.data.length);
+                                console.log('Пример данных:', results.data.slice(0, 2));
                                 const processedData = results.data
                                     .filter(row => row.date && row.time)
                                     .map(row => {
@@ -272,14 +279,17 @@
                                         }
                                     })
                                     .filter(Boolean);
+                                console.log('Количество обработанных строк:', processedData.length);
                                 resolve(processedData);
                             },
                             error: (error) => {
+                                console.error('Ошибка парсинга Papa Parse:', error);
                                 reject(new Error(`Ошибка парсинга CSV: ${error.message}`));
                             }
                         });
                     });
                 } catch (error) {
+                    console.error('Ошибка загрузки данных:', error);
                     throw error;
                 } finally {
                     showLoading(false);
@@ -351,7 +361,6 @@
                 const directionValue = direction.value;
                 const isCurrentDate = currentDate === availableDates[availableDates.length - 1];
                 
-                // Фильтруем данные для текущей даты
                 let dataForCurrentDate = allData.filter(item => item.dateStr === currentDate);
                 
                 let xLabels = [];
@@ -359,20 +368,15 @@
                 let waitArr = [];
                 let bridgeEvents = [];
 
-                // Для текущего дня: последние 24 часа
                 if (isCurrentDate && dataForCurrentDate.length > 0) {
-                    // Находим последнее время в данных
                     const lastEntry = dataForCurrentDate[dataForCurrentDate.length - 1];
                     const lastTime = lastEntry.timeDecimal;
                     
-                    // Определяем предыдущую дату
                     const currentIndex = availableDates.indexOf(currentDate);
                     const prevDate = currentIndex > 0 ? availableDates[currentIndex - 1] : null;
                     
-                    // Собираем данные за последние 24 часа
                     let last24hData = [];
                     
-                    // Добавляем данные предыдущего дня (если есть)
                     if (prevDate) {
                         const prevDayData = allData.filter(item => 
                             item.dateStr === prevDate && 
@@ -381,12 +385,9 @@
                         last24hData = last24hData.concat(prevDayData);
                     }
                     
-                    // Добавляем данные текущего дня
                     last24hData = last24hData.concat(dataForCurrentDate);
                     
-                    // Фильтруем данные за последние 24 часа
                     const filteredData = last24hData.filter(item => {
-                        // Определяем абсолютное время (часы с 00:00 позавчера)
                         const absoluteTime = item.dateStr === prevDate ? 
                             item.timeDecimal + 24 : 
                             item.timeDecimal;
@@ -394,24 +395,19 @@
                         return absoluteTime >= lastTime && absoluteTime <= lastTime + 24;
                     });
                     
-                    // Сортируем по абсолютному времени
                     filteredData.sort((a, b) => {
                         const aTime = a.dateStr === prevDate ? a.timeDecimal + 24 : a.timeDecimal;
                         const bTime = b.dateStr === prevDate ? b.timeDecimal + 24 : b.timeDecimal;
                         return aTime - bTime;
                     });
                     
-                    // Создаем 24 часовых интервала
                     const hourlyData = Array(24).fill(null).map(() => []);
                     
-                    // Распределяем данные по интервалам
                     filteredData.forEach(item => {
-                        // Определяем абсолютное время
                         const absoluteTime = item.dateStr === prevDate ? 
                             item.timeDecimal + 24 : 
                             item.timeDecimal;
                         
-                        // Рассчитываем индекс интервала (0-23)
                         const hourIndex = Math.floor(absoluteTime - lastTime);
                         
                         if (hourIndex >= 0 && hourIndex < 24) {
@@ -419,10 +415,8 @@
                         }
                     });
                     
-                    // Формируем данные для графика
                     for (let i = 0; i < 24; i++) {
-                        // Рассчитываем час для метки
-                        let hour = (Math.floor(lastTime) + i;
+                        let hour = Math.floor(lastTime) + i;
                         if (hour >= 24) hour -= 24;
                         if (hour < 0) hour += 24;
                         hour = hour % 24;
@@ -430,7 +424,6 @@
                         xLabels.push(`${String(Math.floor(hour)).padStart(2, '0')}:00`);
                         
                         if (hourlyData[i].length > 0) {
-                            // Берем последнюю запись в интервале
                             hourlyData[i].sort((a, b) => {
                                 const aTime = a.dateStr === prevDate ? a.timeDecimal + 24 : a.timeDecimal;
                                 const bTime = b.dateStr === prevDate ? b.timeDecimal + 24 : b.timeDecimal;
@@ -449,24 +442,16 @@
                         }
                     }
                     
-                    // События моста для текущего дня
                     bridgeEvents = filteredData.filter(item => item.isBridgeEvent);
                     
-                    // Обновляем метрики для текущего дня
                     updateMetrics(filteredData, directionValue);
-                } 
-                // Для предыдущих дней: полные сутки
-                else {
-                    // Создаем массив для всех часов (0-23)
+                } else {
                     const hoursArray = Array.from({length: 24}, (_, i) => i);
                     
-                    // Для каждого часа заполняем данные
                     hoursArray.forEach(hour => {
-                        // Находим все записи для этого часа
                         const hourEntries = dataForCurrentDate.filter(item => item.hours === hour);
                         
                         if (hourEntries.length > 0) {
-                            // Берем последнюю запись в часу
                             hourEntries.sort((a, b) => b.minutes - a.minutes);
                             const lastEntry = hourEntries[0];
                             
@@ -478,7 +463,6 @@
                             carsArr.push(typeof cars === 'number' ? cars : 0);
                             waitArr.push(wait);
                         } else {
-                            // Если данных нет - ставим 0
                             carsArr.push(0);
                             waitArr.push(0);
                         }
@@ -486,14 +470,11 @@
                         xLabels.push(`${String(hour).padStart(2, '0')}:00`);
                     });
                     
-                    // События моста для предыдущих дней
                     bridgeEvents = dataForCurrentDate.filter(item => item.isBridgeEvent);
                     
-                    // Обновляем метрики для предыдущих дней
                     updateMetrics(dataForCurrentDate, directionValue);
                 }
 
-                // Обрабатываем события моста
                 const shapes = [];
                 const hoverEvents = [];
                 
@@ -503,7 +484,6 @@
                 bridgeEvents.forEach(event => {
                     const color = event.to_crimea === "Closed" ? COLORS.closed : COLORS.opened;
                     
-                    // Используем реальное время без сдвига
                     shapes.push({
                         type: 'line',
                         xref: 'x',
@@ -560,13 +540,11 @@
                     });
                 }
 
-                // Обновляем статус моста
                 const lastEvent = bridgeEvents[bridgeEvents.length - 1];
                 const bridgeStatus = lastEvent ? lastEvent.to_crimea : "Opened";
                 document.getElementById("bridge-status").textContent = bridgeStatus === "Closed" ? "Закрыт" : "Открыт";
                 document.getElementById("bridge-status").style.color = bridgeStatus === "Closed" ? COLORS.closed : COLORS.opened;
 
-                // Создаем график
                 const plotData = [
                     {
                         x: xLabels,
@@ -632,7 +610,6 @@
 
                 Plotly.newPlot(chartEl, plotData, layout, {responsive: true, displayModeBar: false});
 
-                // Обработчики событий наведения
                 chartEl.on('plotly_hover', function(data) {
                     const xVal = data.points[0].x;
                     const hoverEvent = hoverEvents.find(e => {
@@ -718,17 +695,19 @@
                 try {
                     allData = await loadData();
                     if (allData.length === 0) {
-                        showError('Данные не загружены или отсутствуют.');
+                        showError('Данные не загружены или отсутствуют. Проверьте файл crimea_bridge.csv.');
                         return;
                     }
-                    
                     initAvailableDates(allData);
                     currentDate = availableDates[availableDates.length - 1];
+                    if (!currentDate) {
+                        showError('Не удалось определить доступные даты. Проверьте формат данных.');
+                        return;
+                    }
                     updateDatePicker(currentDate);
                     initControls();
                     updateNavigationButtons();
                     updateChart();
-                    
                     document.getElementById('content').style.display = 'block';
                 } catch (error) {
                     showError(`Ошибка загрузки данных: ${error.message}`);
@@ -736,7 +715,20 @@
                 }
             }
 
-            initApp();
+            async function initAppWithTimeout() {
+                const timeout = setTimeout(() => {
+                    showError('Превышено время ожидания загрузки данных. Проверьте подключение или файл crimea_bridge.csv.');
+                }, 10000); // 10 секунд тайм-аута
+                try {
+                    await initApp();
+                    clearTimeout(timeout);
+                } catch (error) {
+                    clearTimeout(timeout);
+                    showError(`Ошибка загрузки данных: ${error.message}`);
+                }
+            }
+
+            initAppWithTimeout();
         });
     </script>
 </body>
