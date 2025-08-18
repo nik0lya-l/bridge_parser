@@ -372,10 +372,10 @@
                     const prevDate = currentIndex > 0 ? availableDates[currentIndex - 1] : null;
                     
                     // Добавляем данные предыдущего дня если нужно
-                    if (startHour < 0 && prevDate) {
+                    if (startHour < lastTime - 24 && prevDate) {
                         const prevDayData = allData.filter(item => 
                             item.dateStr === prevDate && 
-                            item.timeDecimal >= (24 + startHour)
+                            item.timeDecimal >= (24 + (lastTime - 24))
                         );
                         last24hData.push(...prevDayData);
                     }
@@ -383,7 +383,6 @@
                     // Добавляем данные текущего дня
                     const currentDayData = allData.filter(item => 
                         item.dateStr === currentDate && 
-                        item.timeDecimal >= Math.max(0, startHour) && 
                         item.timeDecimal <= lastTime
                     );
                     last24hData.push(...currentDayData);
@@ -391,7 +390,7 @@
                     // Сортируем по времени
                     last24hData.sort((a, b) => a.timeDecimal - b.timeDecimal);
                     
-                    // Создаем 24 часовых интервала
+                    // Создаем 24 интервала
                     const hourlyData = Array(24).fill(null).map(() => []);
                     
                     // Заполняем интервалы данными
@@ -399,10 +398,10 @@
                         // Нормализуем время в диапазон 0-24
                         let normalizedTime = item.timeDecimal;
                         if (item.dateStr === prevDate) {
-                            normalizedTime += 24; // Данные предыдущего дня сдвигаем
+                            normalizedTime += 24;
                         }
                         
-                        const hourIndex = Math.floor(normalizedTime - startHour);
+                        const hourIndex = Math.floor(normalizedTime - (lastTime - 24));
                         if (hourIndex >= 0 && hourIndex < 24) {
                             hourlyData[hourIndex].push(item);
                         }
@@ -410,8 +409,8 @@
                     
                     // Формируем данные для графика
                     for (let i = 0; i < 24; i++) {
-                        const hour = (Math.floor(startHour) + i) % 24;
-                        xLabels.push(`${String(hour).padStart(2, '0')}:00`);
+                        const hour = (i + Math.floor(lastTime - 24)) % 24;
+                        xLabels.push(`${String(Math.floor(hour)).padStart(2, '0')}:00`);
                         
                         if (hourlyData[i].length > 0) {
                             // Берем последнюю запись в интервале
