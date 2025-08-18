@@ -410,8 +410,7 @@
                         let hour = Math.floor(startTime) + i;
                         if (hour < 0) hour += 24;
                         else if (hour >= 24) hour -= 24;
-                        
-                        xLabels.push(`${String(Math.floor(hour)).padStart(2, '0')}:00`);
+                        xLabels.push(`${String(hour % 24).padStart(2, '0')}:00`);
                         
                         if (hourlyData[i].length > 0) {
                             hourlyData[i].sort((a, b) => {
@@ -419,11 +418,9 @@
                                 const bTime = b.dateStr === prevDate ? b.timeDecimal - 24 : b.timeDecimal;
                                 return bTime - aTime;
                             });
-                            
                             const lastInHour = hourlyData[i][0];
                             const cars = directionValue === 'to_crimea' ? lastInHour.to_crimea : lastInHour.from_crimea;
                             const wait = directionValue === 'to_crimea' ? lastInHour.to_crimea_wait : lastInHour.from_crimea_wait;
-                            
                             carsArr.push(typeof cars === 'number' ? cars : 0);
                             waitArr.push(wait);
                         } else {
@@ -433,48 +430,37 @@
                     }
                     
                     bridgeEvents = filteredData.filter(item => item.isBridgeEvent);
-                    
                     updateMetrics(filteredData, directionValue);
                 } else {
                     const hoursArray = Array.from({length: 24}, (_, i) => i);
                     
                     hoursArray.forEach(hour => {
                         const hourEntries = dataForCurrentDate.filter(item => item.hours === hour);
-                        
                         if (hourEntries.length > 0) {
                             hourEntries.sort((a, b) => b.minutes - a.minutes);
                             const lastEntry = hourEntries[0];
-                            
-                            const cars = lastEntry ? 
-                                (directionValue === 'to_crimea' ? lastEntry.to_crimea : lastEntry.from_crimea) : 0;
-                            const wait = lastEntry ? 
-                                (directionValue === 'to_crimea' ? lastEntry.to_crimea_wait : lastEntry.from_crimea_wait) : 0;
-                            
+                            const cars = lastEntry ? (directionValue === 'to_crimea' ? lastEntry.to_crimea : lastEntry.from_crimea) : 0;
+                            const wait = lastEntry ? (directionValue === 'to_crimea' ? lastEntry.to_crimea_wait : lastEntry.from_crimea_wait) : 0;
                             carsArr.push(typeof cars === 'number' ? cars : 0);
                             waitArr.push(wait);
                         } else {
                             carsArr.push(0);
                             waitArr.push(0);
                         }
-                        
                         xLabels.push(`${String(hour).padStart(2, '0')}:00`);
                     });
                     
                     bridgeEvents = dataForCurrentDate.filter(item => item.isBridgeEvent);
-                    
                     updateMetrics(dataForCurrentDate, directionValue);
                 }
 
-                // Обрабатываем события моста
                 const shapes = [];
                 const hoverEvents = [];
-                
                 let isClosed = false;
                 let closedStart = 0;
                 
                 bridgeEvents.forEach(event => {
                     const color = event.to_crimea === "Closed" ? COLORS.closed : COLORS.opened;
-                    
                     shapes.push({
                         type: 'line',
                         xref: 'x',
@@ -487,19 +473,16 @@
                         opacity: 0.7,
                         layer: 'below'
                     });
-
                     hoverEvents.push({
                         x: event.timeDecimal,
                         y: 1,
                         text: `${event.to_crimea === "Closed" ? 'Закрыт' : 'Открыт'} в ${event.displayTime}`,
                         color: color
                     });
-
                     if (event.to_crimea === "Closed" && !isClosed) {
                         isClosed = true;
                         closedStart = event.timeDecimal;
-                    }
-                    else if (event.to_crimea === "Opened" && isClosed) {
+                    } else if (event.to_crimea === "Opened" && isClosed) {
                         shapes.push({
                             type: 'rect',
                             xref: 'x',
