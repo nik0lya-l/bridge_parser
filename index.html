@@ -7,6 +7,7 @@
     <script src="https://cdn.plot.ly/plotly-2.18.2.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <style>
+        /* Стили остаются без изменений */
         body {
             font-family: Arial, sans-serif;
             max-width: 1200px;
@@ -364,44 +365,56 @@
                     // Находим последнее время в данных
                     const lastEntry = dataForCurrentDate[dataForCurrentDate.length - 1];
                     const lastTime = lastEntry.timeDecimal;
-                    const startHour = Math.max(0, lastTime - 24);
+                    
+                    // Определяем начало 24-часового периода
+                    const startTime = lastTime - 24;
                     
                     // Собираем данные за последние 24 часа
                     const last24hData = [];
                     const currentIndex = availableDates.indexOf(currentDate);
                     const prevDate = currentIndex > 0 ? availableDates[currentIndex - 1] : null;
                     
-                    // Добавляем данные предыдущего дня если нужно
-                    if (startHour < lastTime - 24 && prevDate) {
+                    // Добавляем данные предыдущего дня
+                    if (prevDate) {
                         const prevDayData = allData.filter(item => 
                             item.dateStr === prevDate && 
-                            item.timeDecimal >= (24 + (lastTime - 24))
+                            item.timeDecimal >= 0
                         );
                         last24hData.push(...prevDayData);
                     }
                     
                     // Добавляем данные текущего дня
-                    const currentDayData = allData.filter(item => 
-                        item.dateStr === currentDate && 
-                        item.timeDecimal <= lastTime
-                    );
-                    last24hData.push(...currentDayData);
+                    last24hData.push(...dataForCurrentDate);
+                    
+                    // Фильтруем только данные за последние 24 часа
+                    const filteredData = last24hData.filter(item => {
+                        // Для предыдущего дня: время + 24
+                        const absTime = item.dateStr === prevDate ? 
+                            item.timeDecimal + 24 : 
+                            item.timeDecimal;
+                            
+                        return absTime >= startTime && absTime <= lastTime;
+                    });
                     
                     // Сортируем по времени
-                    last24hData.sort((a, b) => a.timeDecimal - b.timeDecimal);
+                    filteredData.sort((a, b) => {
+                        const aTime = a.dateStr === prevDate ? a.timeDecimal + 24 : a.timeDecimal;
+                        const bTime = b.dateStr === prevDate ? b.timeDecimal + 24 : b.timeDecimal;
+                        return aTime - bTime;
+                    });
                     
-                    // Создаем 24 интервала
+                    // Создаем 24 часовых интервала
                     const hourlyData = Array(24).fill(null).map(() => []);
                     
                     // Заполняем интервалы данными
-                    last24hData.forEach(item => {
-                        // Нормализуем время в диапазон 0-24
-                        let normalizedTime = item.timeDecimal;
-                        if (item.dateStr === prevDate) {
-                            normalizedTime += 24;
-                        }
+                    filteredData.forEach(item => {
+                        // Определяем абсолютное время в 24-часовом периоде
+                        const absTime = item.dateStr === prevDate ? 
+                            item.timeDecimal + 24 : 
+                            item.timeDecimal;
+                            
+                        const hourIndex = Math.floor(absTime - startTime);
                         
-                        const hourIndex = Math.floor(normalizedTime - (lastTime - 24));
                         if (hourIndex >= 0 && hourIndex < 24) {
                             hourlyData[hourIndex].push(item);
                         }
@@ -409,14 +422,20 @@
                     
                     // Формируем данные для графика
                     for (let i = 0; i < 24; i++) {
-                        const hour = (i + Math.floor(lastTime - 24)) % 24;
-                        xLabels.push(`${String(Math.floor(hour)).padStart(2, '0')}:00`);
+                        // Рассчитываем час для метки
+                        const hourValue = (Math.floor(startTime) + i) % 24;
+                        const hourLabel = String(hourValue).padStart(2, '0');
+                        xLabels.push(`${hourLabel}:00`);
                         
                         if (hourlyData[i].length > 0) {
                             // Берем последнюю запись в интервале
-                            hourlyData[i].sort((a, b) => b.timeDecimal - a.timeDecimal);
-                            const lastInHour = hourlyData[i][0];
+                            hourlyData[i].sort((a, b) => {
+                                const aTime = a.dateStr === prevDate ? a.timeDecimal + 24 : a.timeDecimal;
+                                const bTime = b.dateStr === prevDate ? b.timeDecimal + 24 : b.timeDecimal;
+                                return bTime - aTime;
+                            });
                             
+                            const lastInHour = hourlyData[i][0];
                             const cars = directionValue === 'to_crimea' ? lastInHour.to_crimea : lastInHour.from_crimea;
                             const wait = directionValue === 'to_crimea' ? lastInHour.to_crimea_wait : lastInHour.from_crimea_wait;
                             
@@ -429,10 +448,10 @@
                     }
                     
                     // События моста для текущего дня
-                    bridgeEvents = last24hData.filter(item => item.isBridgeEvent);
+                    bridgeEvents = filteredData.filter(item => item.isBridgeEvent);
                     
                     // Обновляем метрики для текущего дня
-                    updateMetrics(last24hData, directionValue);
+                    updateMetrics(filteredData, directionValue);
                 } 
                 // Для предыдущих дней: полные сутки
                 else {
