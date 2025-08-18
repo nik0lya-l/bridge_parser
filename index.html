@@ -1,134 +1,723 @@
 <!DOCTYPE html>
 <html lang="ru">
 <head>
-    <meta charset="UTF-8">
-    <title>График по данным Крымского моста</title>
-    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1" />
+    <title>Крымский мост - статистика</title>
+    <script src="https://cdn.plot.ly/plotly-2.18.2.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 1200px;
+            margin: 0 auto;
+            padding: 20px;
+            background-color: #f9f9f9;
+        }
+        .header {
+            text-align: center;
+            margin-bottom: 30px;
+            padding: 20px;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin-bottom: 30px;
+            flex-wrap: wrap;
+            background-color: #fff;
+            padding: 20px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .direction-selector {
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
+        }
+        .direction-options {
+            display: flex;
+            gap: 15px;
+        }
+        .date-nav {
+            display: flex;
+            align-items: center;
+            gap: 15px;
+        }
+        .nav-button {
+            padding: 8px 15px;
+            cursor: pointer;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 5px;
+            font-size: 16px;
+            transition: background-color 0.3s;
+        }
+        .nav-button:hover:not(:disabled) {
+            background-color: #45a049;
+        }
+        .nav-button:disabled {
+            background-color: #cccccc;
+            cursor: not-allowed;
+        }
+        #date-picker {
+            padding: 8px;
+            border: 1px solid #ddd;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        .metrics {
+            display: flex;
+            justify-content: center;
+            gap: 30px;
+            margin: 30px 0;
+            flex-wrap: wrap;
+        }
+        .metric-card {
+            background-color: #fff;
+            border-radius: 10px;
+            padding: 20px;
+            min-width: 250px;
+            text-align: center;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .metric-title {
+            font-size: 16px;
+            color: #555;
+            margin-bottom: 10px;
+        }
+        .metric-value {
+            font-size: 28px;
+            font-weight: bold;
+            color: #1f77b4;
+        }
+        .metric-wait {
+            color: #ff7f0e;
+        }
+        #chart {
+            height: 550px;
+            width: 100%;
+            background-color: #fff;
+            border-radius: 10px;
+            padding: 20px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .error-message {
+            color: red;
+            text-align: center;
+            padding: 20px;
+            background-color: #ffeeee;
+            border-radius: 5px;
+            margin: 20px 0;
+        }
+        .loading-message {
+            color: #555;
+            text-align: center;
+            padding: 20px;
+            font-style: italic;
+        }
+        .modebar {
+            display: none !important;
+        }
+        .hovertext {
+            font-family: Arial, sans-serif !important;
+            font-size: 14px !important;
+            padding: 8px !important;
+            background: rgba(255, 255, 255, 0.95) !important;
+            border: 1px solid #ddd !important;
+            border-radius: 5px !important;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1) !important;
+        }
+        .plotly .legend {
+            top: 100% !important;
+            bottom: auto !important;
+            transform: none !important;
+            margin-top: 20px;
+        }
+    </style>
 </head>
 <body>
-    <h2>Очереди на Крымском мосту</h2>
-    <div>
-        <button id="prevDate">←</button>
-        <span id="currentDate"></span>
-        <button id="nextDate">→</button>
+    <div id="loading" class="loading-message">Загрузка данных...</div>
+    
+    <div id="content" style="display: none;">
+        <div class="header">
+            <h1>Статистика движения по Крымскому мосту</h1>
+            <p>Актуальные данные о количестве машин и времени ожидания</p>
+        </div>
+
+        <div class="controls">
+            <div class="direction-selector">
+                <label><strong>Направление движения:</strong></label>
+                <div class="direction-options">
+                    <label>
+                        <input type="radio" id="to_crimea" name="direction" value="to_crimea" checked />
+                        В Крым
+                    </label>
+                    <label>
+                        <input type="radio" id="from_crimea" name="direction" value="from_crimea" />
+                        Из Крыма
+                    </label>
+                </div>
+            </div>
+
+            <div class="date-nav">
+                <button class="nav-button" id="prev-date" title="Предыдущий день">←</button>
+                <input type="date" id="date-picker" />
+                <button class="nav-button" id="next-date" title="Следующий день">→</button>
+            </div>
+        </div>
+
+        <div id="chart"></div>
+
+        <div class="metrics">
+            <div class="metric-card">
+                <div class="metric-title">Всего машин за сутки</div>
+                <div class="metric-value" id="total-cars">0</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-title">Максимальное время ожидания</div>
+                <div class="metric-value metric-wait" id="max-wait">0 часов</div>
+            </div>
+            <div class="metric-card">
+                <div class="metric-title">Статус моста</div>
+                <div class="metric-value" id="bridge-status">Открыт</div>
+            </div>
+        </div>
     </div>
-    <canvas id="chart" width="800" height="400"></canvas>
+
+    <div id="error-message" class="error-message" style="display: none;"></div>
 
     <script>
-    let allData = [];
-    let availableDates = [];
-    let currentDateIndex = 0;
-    let chart;
+        document.addEventListener('DOMContentLoaded', function() {
+            const DATA_URL = "crimea_bridge.csv";
 
-    async function loadData() {
-        const response = await fetch("data.csv");
-        const text = await response.text();
-        const rows = text.trim().split("\n").slice(1);
-        
-        allData = rows.map(row => {
-            const [dateStr, timeStr, cars, wait] = row.split(",");
-            const [hours, minutes] = timeStr.split(":").map(Number);
-            return {
-                dateStr,
-                timeStr,
-                cars: Number(cars),
-                wait: Number(wait),
-                hours,
-                minutes,
-                timeDecimal: hours + minutes / 60
+            let allData = [];
+            let availableDates = [];
+            let currentDate = null;
+
+            const COLORS = {
+                cars: "#00B4B4",
+                wait: "#FF8C42",
+                closed: "#FF6B6B",
+                opened: "#51CF66"
             };
-        });
 
-        availableDates = [...new Set(allData.map(item => item.dateStr))].sort((a, b) => {
-            const [d1, m1, y1] = a.split(".").map(Number);
-            const [d2, m2, y2] = b.split(".").map(Number);
-            return new Date(y1, m1 - 1, d1) - new Date(y2, m2 - 1, d2);
-        });
+            function showLoading(show) {
+                document.getElementById('loading').style.display = show ? 'block' : 'none';
+                document.getElementById('content').style.display = show ? 'none' : 'block';
+            }
 
-        currentDateIndex = availableDates.length - 1;
-        updateChart();
-    }
+            function showError(message) {
+                document.getElementById('error-message').textContent = message;
+                document.getElementById('error-message').style.display = 'block';
+                document.getElementById('content').style.display = 'none';
+                document.getElementById('loading').style.display = 'none';
+            }
 
-    function updateChart() {
-        const currentDate = availableDates[currentDateIndex];
-        const isCurrentDate = currentDateIndex === availableDates.length - 1;
-        document.getElementById("currentDate").textContent = currentDate;
+            function parseDateTime(dateStr, timeStr) {
+                const [hours, minutes] = timeStr.split(':').map(Number);
+                const timeDecimal = hours + (minutes / 60);
+                
+                return {
+                    dateStr: dateStr,
+                    timeStr: timeStr,
+                    hours: hours,
+                    minutes: minutes,
+                    timeDecimal: timeDecimal,
+                    displayTime: timeStr
+                };
+            }
 
-        let dataForCurrentDate = allData.filter(item => item.dateStr === currentDate);
-
-        if (isCurrentDate && dataForCurrentDate.length > 0) {
-            const lastEntry = dataForCurrentDate.reduce((a, b) => 
-                (a.dateStr < b.dateStr || (a.dateStr === b.dateStr && a.timeDecimal < b.timeDecimal)) ? b : a
-            );
-
-            const [d, m, y] = lastEntry.dateStr.split('.').map(Number);
-            const lastDateTime = new Date(y, m - 1, d, lastEntry.hours, lastEntry.minutes);
-            const startDateTime = new Date(lastDateTime.getTime() - 24 * 60 * 60 * 1000);
-
-            dataForCurrentDate = allData.filter(item => {
-                const [dd, mm, yy] = item.dateStr.split('.').map(Number);
-                const itemDate = new Date(yy, mm - 1, dd, item.hours, item.minutes);
-                return itemDate >= startDateTime && itemDate <= lastDateTime;
-            });
-        }
-
-        const labels = dataForCurrentDate.map(item => item.timeStr);
-        const carsData = dataForCurrentDate.map(item => item.cars);
-        const waitData = dataForCurrentDate.map(item => item.wait);
-
-        if (chart) chart.destroy();
-
-        chart = new Chart(document.getElementById("chart").getContext("2d"), {
-            type: "line",
-            data: {
-                labels: labels,
-                datasets: [
-                    {
-                        label: "Количество машин",
-                        data: carsData,
-                        borderColor: "blue",
-                        yAxisID: "y"
-                    },
-                    {
-                        label: "Ожидание (часы)",
-                        data: waitData,
-                        borderColor: "red",
-                        yAxisID: "y1"
+            async function loadData() {
+                showLoading(true);
+                
+                try {
+                    const response = await fetch(DATA_URL);
+                    if (!response.ok) {
+                        throw new Error(`Ошибка HTTP! Статус: ${response.status}`);
                     }
-                ]
-            },
-            options: {
-                responsive: true,
-                scales: {
-                    y: {
-                        type: "linear",
-                        position: "left"
-                    },
-                    y1: {
-                        type: "linear",
-                        position: "right",
-                        grid: { drawOnChartArea: false }
-                    }
+                    
+                    const text = await response.text();
+                    
+                    return new Promise((resolve, reject) => {
+                        Papa.parse(text, {
+                            header: true,
+                            skipEmptyLines: true,
+                            complete: (results) => {
+                                const processedData = results.data
+                                    .filter(row => row.date && row.time)
+                                    .map(row => {
+                                        try {
+                                            const dt = parseDateTime(row.date, row.time);
+                                            
+                                            return {
+                                                ...dt,
+                                                to_crimea: row.to_crimea === "Closed" ? "Closed" : 
+                                                          row.to_crimea === "Opened" ? "Opened" : 
+                                                          parseInt(row.to_crimea) || 0,
+                                                from_crimea: row.from_crimea === "Closed" ? "Closed" : 
+                                                            row.from_crimea === "Opened" ? "Opened" : 
+                                                            parseInt(row.from_crimea) || 0,
+                                                to_crimea_wait: parseFloat(row.to_crimea_wait) || 0,
+                                                from_crimea_wait: parseFloat(row.from_crimea_wait) || 0,
+                                                isBridgeEvent: row.to_crimea === "Closed" || row.to_crimea === "Opened"
+                                            };
+                                        } catch (e) {
+                                            console.error("Ошибка обработки строки:", row, e);
+                                            return null;
+                                        }
+                                    })
+                                    .filter(Boolean);
+                                resolve(processedData);
+                            },
+                            error: (error) => {
+                                reject(new Error(`Ошибка парсинга CSV: ${error.message}`));
+                            }
+                        });
+                    });
+                } catch (error) {
+                    throw error;
+                } finally {
+                    showLoading(false);
                 }
             }
+
+            function initAvailableDates(data) {
+                const dateSet = new Set(data.map(item => item.dateStr));
+                availableDates = Array.from(dateSet).sort((a, b) => {
+                    const [aDay, aMonth, aYear] = a.split('.').map(Number);
+                    const [bDay, bMonth, bYear] = b.split('.').map(Number);
+                    return new Date(aYear, aMonth-1, aDay) - new Date(bYear, bMonth-1, bDay);
+                });
+            }
+
+            function updateDatePicker(dateStr) {
+                const dateInput = document.getElementById('date-picker');
+                if (!dateInput) return;
+                
+                const [day, month, year] = dateStr.split('.');
+                const isoDate = `${year}-${month.padStart(2, '0')}-${day.padStart(2, '0')}`;
+                
+                dateInput.value = isoDate;
+                
+                if (availableDates.length > 0) {
+                    const firstDate = availableDates[0].split('.');
+                    const lastDate = availableDates[availableDates.length - 1].split('.');
+                    
+                    dateInput.min = `${firstDate[2]}-${firstDate[1].padStart(2, '0')}-${firstDate[0].padStart(2, '0')}`;
+                    dateInput.max = `${lastDate[2]}-${lastDate[1].padStart(2, '0')}-${lastDate[0].padStart(2, '0')}`;
+                }
+            }
+
+            function updateNavigationButtons() {
+                const prevBtn = document.getElementById('prev-date');
+                const nextBtn = document.getElementById('next-date');
+                if (!prevBtn || !nextBtn) return;
+                
+                const currentIndex = availableDates.indexOf(currentDate);
+                prevBtn.disabled = currentIndex <= 0;
+                nextBtn.disabled = currentIndex >= availableDates.length - 1;
+            }
+
+            function updateMetrics(data, direction) {
+                const trafficData = data.filter(item => !item.isBridgeEvent);
+                
+                const totalCars = trafficData.reduce((sum, item) => {
+                    const cars = direction === 'to_crimea' ? item.to_crimea : item.from_crimea;
+                    return sum + (typeof cars === 'number' ? cars : 0);
+                }, 0);
+
+                const maxWaitRaw = Math.max(...trafficData.map(item => {
+                    const wait = direction === 'to_crimea' ? item.to_crimea_wait : item.from_crimea_wait;
+                    return typeof wait === 'number' ? wait : 0;
+                }));
+                const maxWait = maxWaitRaw ? maxWaitRaw.toFixed(2) : "0";
+
+                document.getElementById("total-cars").textContent = totalCars.toLocaleString('ru-RU');
+                document.getElementById("max-wait").textContent = `${maxWait} часов`;
+            }
+
+            function updateChart() {
+                const chartEl = document.getElementById('chart');
+                if (!chartEl || !allData || allData.length === 0) return;
+
+                const direction = document.querySelector('input[name="direction"]:checked');
+                if (!direction) return;
+                
+                const directionValue = direction.value;
+                const isCurrentDate = currentDate === availableDates[availableDates.length - 1];
+                
+                // Фильтруем данные для текущей даты
+                let dataForCurrentDate = allData.filter(item => item.dateStr === currentDate);
+                
+                let xLabels = [];
+                let carsArr = [];
+                let waitArr = [];
+                let bridgeEvents = [];
+
+                // Для текущего дня: последние 24 часа
+                if (isCurrentDate && dataForCurrentDate.length > 0) {
+                    // Находим последнее время в данных
+                    const lastEntry = dataForCurrentDate[dataForCurrentDate.length - 1];
+                    const lastTime = lastEntry.timeDecimal;
+                    const startHour = Math.max(0, lastTime - 24);
+                    
+                    // Собираем данные за последние 24 часа
+                    const last24hData = [];
+                    const currentIndex = availableDates.indexOf(currentDate);
+                    const prevDate = currentIndex > 0 ? availableDates[currentIndex - 1] : null;
+                    
+                    // Добавляем данные предыдущего дня если нужно
+                    if (startHour < 0 && prevDate) {
+                        const prevDayData = allData.filter(item => 
+                            item.dateStr === prevDate && 
+                            item.timeDecimal >= (24 + startHour)
+                        );
+                        last24hData.push(...prevDayData);
+                    }
+                    
+                    // Добавляем данные текущего дня
+                    const currentDayData = allData.filter(item => 
+                        item.dateStr === currentDate && 
+                        item.timeDecimal >= Math.max(0, startHour) && 
+                        item.timeDecimal <= lastTime
+                    );
+                    last24hData.push(...currentDayData);
+                    
+                    // Сортируем по времени
+                    last24hData.sort((a, b) => a.timeDecimal - b.timeDecimal);
+                    
+                    // Создаем 24 часовых интервала
+                    const hourlyData = Array(24).fill(null).map(() => []);
+                    
+                    // Заполняем интервалы данными
+                    last24hData.forEach(item => {
+                        // Нормализуем время в диапазон 0-24
+                        let normalizedTime = item.timeDecimal;
+                        if (item.dateStr === prevDate) {
+                            normalizedTime += 24; // Данные предыдущего дня сдвигаем
+                        }
+                        
+                        const hourIndex = Math.floor(normalizedTime - startHour);
+                        if (hourIndex >= 0 && hourIndex < 24) {
+                            hourlyData[hourIndex].push(item);
+                        }
+                    });
+                    
+                    // Формируем данные для графика
+                    for (let i = 0; i < 24; i++) {
+                        const hour = (Math.floor(startHour) + i) % 24;
+                        xLabels.push(`${String(hour).padStart(2, '0')}:00`);
+                        
+                        if (hourlyData[i].length > 0) {
+                            // Берем последнюю запись в интервале
+                            hourlyData[i].sort((a, b) => b.timeDecimal - a.timeDecimal);
+                            const lastInHour = hourlyData[i][0];
+                            
+                            const cars = directionValue === 'to_crimea' ? lastInHour.to_crimea : lastInHour.from_crimea;
+                            const wait = directionValue === 'to_crimea' ? lastInHour.to_crimea_wait : lastInHour.from_crimea_wait;
+                            
+                            carsArr.push(typeof cars === 'number' ? cars : 0);
+                            waitArr.push(wait);
+                        } else {
+                            carsArr.push(0);
+                            waitArr.push(0);
+                        }
+                    }
+                    
+                    // События моста для текущего дня
+                    bridgeEvents = last24hData.filter(item => item.isBridgeEvent);
+                    
+                    // Обновляем метрики для текущего дня
+                    updateMetrics(last24hData, directionValue);
+                } 
+                // Для предыдущих дней: полные сутки
+                else {
+                    // Создаем массив для всех часов (0-23)
+                    const hoursArray = Array.from({length: 24}, (_, i) => i);
+                    
+                    // Для каждого часа заполняем данные
+                    hoursArray.forEach(hour => {
+                        // Находим все записи для этого часа
+                        const hourEntries = dataForCurrentDate.filter(item => item.hours === hour);
+                        
+                        if (hourEntries.length > 0) {
+                            // Берем последнюю запись в часу
+                            hourEntries.sort((a, b) => b.minutes - a.minutes);
+                            const lastEntry = hourEntries[0];
+                            
+                            const cars = lastEntry ? 
+                                (directionValue === 'to_crimea' ? lastEntry.to_crimea : lastEntry.from_crimea) : 0;
+                            const wait = lastEntry ? 
+                                (directionValue === 'to_crimea' ? lastEntry.to_crimea_wait : lastEntry.from_crimea_wait) : 0;
+                            
+                            carsArr.push(typeof cars === 'number' ? cars : 0);
+                            waitArr.push(wait);
+                        } else {
+                            // Если данных нет - ставим 0
+                            carsArr.push(0);
+                            waitArr.push(0);
+                        }
+                        
+                        xLabels.push(`${String(hour).padStart(2, '0')}:00`);
+                    });
+                    
+                    // События моста для предыдущих дней
+                    bridgeEvents = dataForCurrentDate.filter(item => item.isBridgeEvent);
+                    
+                    // Обновляем метрики для предыдущих дней
+                    updateMetrics(dataForCurrentDate, directionValue);
+                }
+
+                // Обрабатываем события моста
+                const shapes = [];
+                const hoverEvents = [];
+                
+                let isClosed = false;
+                let closedStart = 0;
+                
+                bridgeEvents.forEach(event => {
+                    const color = event.to_crimea === "Closed" ? COLORS.closed : COLORS.opened;
+                    
+                    // Используем реальное время без сдвига
+                    shapes.push({
+                        type: 'line',
+                        xref: 'x',
+                        yref: 'paper',
+                        x0: event.timeDecimal,
+                        x1: event.timeDecimal,
+                        y0: 0,
+                        y1: 1,
+                        line: {color: color, width: 2},
+                        opacity: 0.7,
+                        layer: 'below'
+                    });
+
+                    hoverEvents.push({
+                        x: event.timeDecimal,
+                        y: 1,
+                        text: `${event.to_crimea === "Closed" ? 'Закрыт' : 'Открыт'} в ${event.displayTime}`,
+                        color: color
+                    });
+
+                    if (event.to_crimea === "Closed" && !isClosed) {
+                        isClosed = true;
+                        closedStart = event.timeDecimal;
+                    }
+                    else if (event.to_crimea === "Opened" && isClosed) {
+                        shapes.push({
+                            type: 'rect',
+                            xref: 'x',
+                            yref: 'paper',
+                            x0: closedStart,
+                            x1: event.timeDecimal,
+                            y0: 0,
+                            y1: 1,
+                            fillcolor: 'rgba(255, 0, 0, 0.1)',
+                            line: {width: 0},
+                            layer: 'below'
+                        });
+                        isClosed = false;
+                    }
+                });
+
+                if (isClosed) {
+                    shapes.push({
+                        type: 'rect',
+                        xref: 'x',
+                        yref: 'paper',
+                        x0: closedStart,
+                        x1: 24,
+                        y0: 0,
+                        y1: 1,
+                        fillcolor: 'rgba(255, 0, 0, 0.1)',
+                        line: {width: 0},
+                        layer: 'below'
+                    });
+                }
+
+                // Обновляем статус моста
+                const lastEvent = bridgeEvents[bridgeEvents.length - 1];
+                const bridgeStatus = lastEvent ? lastEvent.to_crimea : "Opened";
+                document.getElementById("bridge-status").textContent = bridgeStatus === "Closed" ? "Закрыт" : "Открыт";
+                document.getElementById("bridge-status").style.color = bridgeStatus === "Closed" ? COLORS.closed : COLORS.opened;
+
+                // Создаем график
+                const plotData = [
+                    {
+                        x: xLabels,
+                        y: carsArr,
+                        name: "Машины",
+                        type: "scatter",
+                        mode: "lines+markers",
+                        marker: {color: COLORS.cars},
+                        line: {color: COLORS.cars},
+                        yaxis: "y1",
+                        hovertemplate: '%{y} машин<br>%{x}<extra></extra>'
+                    },
+                    {
+                        x: xLabels,
+                        y: waitArr,
+                        name: "Время ожидания (ч)",
+                        type: "scatter",
+                        mode: "lines+markers",
+                        marker: {color: COLORS.wait},
+                        line: {color: COLORS.wait, dash: 'dot'},
+                        yaxis: "y2",
+                        hovertemplate: '%{y:.2f} ч.<br>%{x}<extra></extra>'
+                    }
+                ];
+
+                const layout = {
+                    title: `Движение ${directionValue === 'to_crimea' ? 'в Крым' : 'из Крыма'} за ${currentDate}`,
+                    xaxis: {
+                        title: "Время (часы)",
+                        tickangle: -45,
+                        tickmode: "array",
+                        tickvals: xLabels,
+                        tickfont: {size: 12},
+                        showgrid: false,
+                        zeroline: false
+                    },
+                    yaxis: {
+                        title: "Количество машин",
+                        side: "left",
+                        showgrid: true,
+                        zeroline: true,
+                        zerolinewidth: 1,
+                        zerolinecolor: "#ddd",
+                        rangemode: "tozero"
+                    },
+                    yaxis2: {
+                        title: "Время ожидания (часы)",
+                        side: "right",
+                        overlaying: "y",
+                        showgrid: false,
+                        zeroline: false,
+                        rangemode: "tozero"
+                    },
+                    margin: {t: 60, b: 150, l: 70, r: 70},
+                    hovermode: "x unified",
+                    shapes: shapes,
+                    legend: {
+                        orientation: "h",
+                        y: -0.3,
+                        x: 0
+                    }
+                };
+
+                Plotly.newPlot(chartEl, plotData, layout, {responsive: true, displayModeBar: false});
+
+                // Обработчики событий наведения
+                chartEl.on('plotly_hover', function(data) {
+                    const xVal = data.points[0].x;
+                    const hoverEvent = hoverEvents.find(e => {
+                        const eventHour = Math.floor(e.x);
+                        const labelHour = parseInt(xVal.split(':')[0]);
+                        return eventHour === labelHour;
+                    });
+                    
+                    if (hoverEvent) {
+                        Plotly.relayout(chartEl, {
+                            annotations: [{
+                                x: hoverEvent.x,
+                                y: 1.05,
+                                xref: 'x',
+                                yref: 'paper',
+                                text: hoverEvent.text,
+                                showarrow: false,
+                                xanchor: 'center',
+                                font: {size: 12, color: hoverEvent.color},
+                                bgcolor: 'rgba(255,255,255,0.9)',
+                                borderpad: 4
+                            }]
+                        });
+                    }
+                });
+
+                chartEl.on('plotly_unhover', function() {
+                    Plotly.relayout(chartEl, {annotations: []});
+                });
+            }
+
+            function initControls() {
+                const directionRadios = document.querySelectorAll('input[name="direction"]');
+                directionRadios.forEach(radio => {
+                    radio.addEventListener('change', updateChart);
+                });
+
+                const dateInput = document.getElementById('date-picker');
+                if (dateInput) {
+                    dateInput.addEventListener('change', () => {
+                        const [year, month, day] = dateInput.value.split('-');
+                        const selectedDate = `${day.padStart(2, '0')}.${month.padStart(2, '0')}.${year}`;
+                        
+                        if (availableDates.includes(selectedDate)) {
+                            currentDate = selectedDate;
+                            updateNavigationButtons();
+                            updateChart();
+                        } else {
+                            alert("Данные за выбранную дату недоступны.");
+                            updateDatePicker(currentDate);
+                        }
+                    });
+                }
+
+                const prevBtn = document.getElementById('prev-date');
+                if (prevBtn) {
+                    prevBtn.addEventListener('click', () => {
+                        const idx = availableDates.indexOf(currentDate);
+                        if (idx > 0) {
+                            currentDate = availableDates[idx - 1];
+                            updateDatePicker(currentDate);
+                            updateNavigationButtons();
+                            updateChart();
+                        }
+                    });
+                }
+
+                const nextBtn = document.getElementById('next-date');
+                if (nextBtn) {
+                    nextBtn.addEventListener('click', () => {
+                        const idx = availableDates.indexOf(currentDate);
+                        if (idx < availableDates.length - 1) {
+                            currentDate = availableDates[idx + 1];
+                            updateDatePicker(currentDate);
+                            updateNavigationButtons();
+                            updateChart();
+                        }
+                    });
+                }
+            }
+
+            async function initApp() {
+                try {
+                    allData = await loadData();
+                    if (allData.length === 0) {
+                        showError('Данные не загружены или отсутствуют.');
+                        return;
+                    }
+                    
+                    initAvailableDates(allData);
+                    currentDate = availableDates[availableDates.length - 1];
+                    updateDatePicker(currentDate);
+                    initControls();
+                    updateNavigationButtons();
+                    updateChart();
+                    
+                    document.getElementById('content').style.display = 'block';
+                } catch (error) {
+                    showError(`Ошибка загрузки данных: ${error.message}`);
+                    console.error(error);
+                }
+            }
+
+            initApp();
         });
-    }
-
-    document.getElementById("prevDate").addEventListener("click", () => {
-        if (currentDateIndex > 0) {
-            currentDateIndex--;
-            updateChart();
-        }
-    });
-
-    document.getElementById("nextDate").addEventListener("click", () => {
-        if (currentDateIndex < availableDates.length - 1) {
-            currentDateIndex++;
-            updateChart();
-        }
-    });
-
-    loadData();
     </script>
 </body>
 </html>
