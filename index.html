@@ -7,7 +7,6 @@
     <script src="https://cdn.plot.ly/plotly-2.18.2.min.js"></script>
     <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.3.0/papaparse.min.js"></script>
     <style>
-        /* Стили остаются без изменений */
         body {
             font-family: Arial, sans-serif;
             max-width: 1200px;
@@ -365,56 +364,45 @@
                     // Находим последнее время в данных
                     const lastEntry = dataForCurrentDate[dataForCurrentDate.length - 1];
                     const lastTime = lastEntry.timeDecimal;
-                    
-                    // Определяем начало 24-часового периода
                     const startTime = lastTime - 24;
                     
-                    // Собираем данные за последние 24 часа
-                    const last24hData = [];
+                    // Определяем предыдущую дату
                     const currentIndex = availableDates.indexOf(currentDate);
                     const prevDate = currentIndex > 0 ? availableDates[currentIndex - 1] : null;
                     
-                    // Добавляем данные предыдущего дня
+                    // Собираем данные за последние 24 часа
+                    let last24hData = [];
+                    
+                    // Добавляем данные предыдущего дня (если есть)
                     if (prevDate) {
                         const prevDayData = allData.filter(item => 
                             item.dateStr === prevDate && 
                             item.timeDecimal >= 0
                         );
-                        last24hData.push(...prevDayData);
+                        last24hData = last24hData.concat(prevDayData);
                     }
                     
                     // Добавляем данные текущего дня
-                    last24hData.push(...dataForCurrentDate);
+                    last24hData = last24hData.concat(dataForCurrentDate);
                     
-                    // Фильтруем только данные за последние 24 часа
+                    // Фильтруем данные за последние 24 часа
                     const filteredData = last24hData.filter(item => {
-                        // Для предыдущего дня: время + 24
                         const absTime = item.dateStr === prevDate ? 
                             item.timeDecimal + 24 : 
                             item.timeDecimal;
-                            
                         return absTime >= startTime && absTime <= lastTime;
-                    });
-                    
-                    // Сортируем по времени
-                    filteredData.sort((a, b) => {
-                        const aTime = a.dateStr === prevDate ? a.timeDecimal + 24 : a.timeDecimal;
-                        const bTime = b.dateStr === prevDate ? b.timeDecimal + 24 : b.timeDecimal;
-                        return aTime - bTime;
                     });
                     
                     // Создаем 24 часовых интервала
                     const hourlyData = Array(24).fill(null).map(() => []);
                     
-                    // Заполняем интервалы данными
+                    // Распределяем данные по интервалам
                     filteredData.forEach(item => {
-                        // Определяем абсолютное время в 24-часовом периоде
                         const absTime = item.dateStr === prevDate ? 
                             item.timeDecimal + 24 : 
                             item.timeDecimal;
-                            
-                        const hourIndex = Math.floor(absTime - startTime);
                         
+                        const hourIndex = Math.floor(absTime - startTime);
                         if (hourIndex >= 0 && hourIndex < 24) {
                             hourlyData[hourIndex].push(item);
                         }
