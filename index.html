@@ -364,7 +364,6 @@
                     // Находим последнее время в данных
                     const lastEntry = dataForCurrentDate[dataForCurrentDate.length - 1];
                     const lastTime = lastEntry.timeDecimal;
-                    const startTime = lastTime - 24;
                     
                     // Определяем предыдущую дату
                     const currentIndex = availableDates.indexOf(currentDate);
@@ -387,10 +386,19 @@
                     
                     // Фильтруем данные за последние 24 часа
                     const filteredData = last24hData.filter(item => {
-                        const absTime = item.dateStr === prevDate ? 
+                        // Определяем абсолютное время (часы с 00:00 позавчера)
+                        const absoluteTime = item.dateStr === prevDate ? 
                             item.timeDecimal + 24 : 
                             item.timeDecimal;
-                        return absTime >= startTime && absTime <= lastTime;
+                        
+                        return absoluteTime >= lastTime && absoluteTime <= lastTime + 24;
+                    });
+                    
+                    // Сортируем по абсолютному времени
+                    filteredData.sort((a, b) => {
+                        const aTime = a.dateStr === prevDate ? a.timeDecimal + 24 : a.timeDecimal;
+                        const bTime = b.dateStr === prevDate ? b.timeDecimal + 24 : b.timeDecimal;
+                        return aTime - bTime;
                     });
                     
                     // Создаем 24 часовых интервала
@@ -398,11 +406,14 @@
                     
                     // Распределяем данные по интервалам
                     filteredData.forEach(item => {
-                        const absTime = item.dateStr === prevDate ? 
+                        // Определяем абсолютное время
+                        const absoluteTime = item.dateStr === prevDate ? 
                             item.timeDecimal + 24 : 
                             item.timeDecimal;
                         
-                        const hourIndex = Math.floor(absTime - startTime);
+                        // Рассчитываем индекс интервала (0-23)
+                        const hourIndex = Math.floor(absoluteTime - lastTime);
+                        
                         if (hourIndex >= 0 && hourIndex < 24) {
                             hourlyData[hourIndex].push(item);
                         }
@@ -411,9 +422,12 @@
                     // Формируем данные для графика
                     for (let i = 0; i < 24; i++) {
                         // Рассчитываем час для метки
-                        const hourValue = (Math.floor(startTime) + i) % 24;
-                        const hourLabel = String(hourValue).padStart(2, '0');
-                        xLabels.push(`${hourLabel}:00`);
+                        let hour = (Math.floor(lastTime) + i;
+                        if (hour >= 24) hour -= 24;
+                        if (hour < 0) hour += 24;
+                        hour = hour % 24;
+                        
+                        xLabels.push(`${String(Math.floor(hour)).padStart(2, '0')}:00`);
                         
                         if (hourlyData[i].length > 0) {
                             // Берем последнюю запись в интервале
