@@ -371,8 +371,10 @@
                 if (isCurrentDate && dataForCurrentDate.length > 0) {
                     const lastEntry = dataForCurrentDate[dataForCurrentDate.length - 1];
                     const lastTime = lastEntry.timeDecimal;
-                    const startTime = lastTime - 24;
+                    const startTime = lastTime - 23; // 24-hour window starting from lastTime - 23 hours
                     
+                    console.log(`Current date: ${currentDate}, Last Time: ${lastTime}, Start Time: ${startTime}`);
+
                     const currentIndex = availableDates.indexOf(currentDate);
                     const prevDate = currentIndex > 0 ? availableDates[currentIndex - 1] : null;
                     
@@ -396,17 +398,17 @@
                         return aTime - bTime;
                     });
                     
-                    const hourlyData = Array(25).fill(null).map(() => []);
+                    const hourlyData = Array(24).fill(null).map(() => []); // 24 points for 24 hours
                     
                     filteredData.forEach(item => {
                         const absoluteTime = item.dateStr === prevDate ? item.timeDecimal - 24 : item.timeDecimal;
                         const hourIndex = Math.floor(absoluteTime - startTime);
-                        if (hourIndex >= 0 && hourIndex < 25) {
+                        if (hourIndex >= 0 && hourIndex < 24) {
                             hourlyData[hourIndex].push(item);
                         }
                     });
                     
-                    for (let i = 0; i < 25; i++) {
+                    for (let i = 0; i < 24; i++) {
                         let hour = Math.floor(startTime) + i;
                         if (hour < 0) hour += 24;
                         else if (hour >= 24) hour -= 24;
@@ -436,31 +438,41 @@
                     
                     hoursArray.forEach(hour => {
                         const hourEntries = dataForCurrentDate.filter(item => item.hours === hour);
+                        
                         if (hourEntries.length > 0) {
                             hourEntries.sort((a, b) => b.minutes - a.minutes);
                             const lastEntry = hourEntries[0];
-                            const cars = lastEntry ? (directionValue === 'to_crimea' ? lastEntry.to_crimea : lastEntry.from_crimea) : 0;
-                            const wait = lastEntry ? (directionValue === 'to_crimea' ? lastEntry.to_crimea_wait : lastEntry.from_crimea_wait) : 0;
+                            
+                            const cars = lastEntry ? 
+                                (directionValue === 'to_crimea' ? lastEntry.to_crimea : lastEntry.from_crimea) : 0;
+                            const wait = lastEntry ? 
+                                (directionValue === 'to_crimea' ? lastEntry.to_crimea_wait : lastEntry.from_crimea_wait) : 0;
+                            
                             carsArr.push(typeof cars === 'number' ? cars : 0);
                             waitArr.push(wait);
                         } else {
                             carsArr.push(0);
                             waitArr.push(0);
                         }
+                        
                         xLabels.push(`${String(hour).padStart(2, '0')}:00`);
                     });
                     
                     bridgeEvents = dataForCurrentDate.filter(item => item.isBridgeEvent);
+                    
                     updateMetrics(dataForCurrentDate, directionValue);
                 }
 
+                // Обрабатываем события моста
                 const shapes = [];
                 const hoverEvents = [];
+                
                 let isClosed = false;
                 let closedStart = 0;
                 
                 bridgeEvents.forEach(event => {
                     const color = event.to_crimea === "Closed" ? COLORS.closed : COLORS.opened;
+                    
                     shapes.push({
                         type: 'line',
                         xref: 'x',
@@ -473,16 +485,19 @@
                         opacity: 0.7,
                         layer: 'below'
                     });
+
                     hoverEvents.push({
                         x: event.timeDecimal,
                         y: 1,
                         text: `${event.to_crimea === "Closed" ? 'Закрыт' : 'Открыт'} в ${event.displayTime}`,
                         color: color
                     });
+
                     if (event.to_crimea === "Closed" && !isClosed) {
                         isClosed = true;
                         closedStart = event.timeDecimal;
-                    } else if (event.to_crimea === "Opened" && isClosed) {
+                    }
+                    else if (event.to_crimea === "Opened" && isClosed) {
                         shapes.push({
                             type: 'rect',
                             xref: 'x',
