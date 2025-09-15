@@ -2,7 +2,7 @@ name: Telegram Parser Auto-Run
 
 on:
   schedule:
-    - cron: '15 * * * *'
+    - cron: '50 3 * * *'
   workflow_dispatch:
 
 permissions:
